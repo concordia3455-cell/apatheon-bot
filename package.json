@@ -1,10 +1,9 @@
 {
   "name": "apatheon-bot",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "bot1.js",
   "scripts": {
-  "start": "node bot1.js & node bot2.js & node bot3.js & node bot4.js"
-}
+    "start": "node bot1.js & node bot2.js & node bot3.js & node bot4.js"
   },
   "dependencies": {
     "discord.js": "^14.14.1",
