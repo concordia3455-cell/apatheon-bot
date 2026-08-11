@@ -1,14 +1,15 @@
 {
   "name": "apatheon-bot",
   "version": "1.0.0",
-  "main": "bot1.js",
+  "main": "index.js",
   "scripts": {
-    "start": "node bot1.js & node bot2.js & node bot3.js & node bot4.js"
+    "start": "node index.js"
   },
   "dependencies": {
     "discord.js": "^14.14.1",
     "@discordjs/voice": "^0.16.1",
     "@discordjs/opus": "^0.9.0",
-    "sodium-native": "^4.0.1"
+    "sodium-native": "^4.0.1",
+    "express": "^4.19.2"
   }
 }
