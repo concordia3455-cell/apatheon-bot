@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+  "start": "node bot1.js & node bot2.js & node bot3.js & node bot4.js"
+}
   },
   "dependencies": {
     "discord.js": "^14.14.1",
