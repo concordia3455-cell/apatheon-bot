@@ -5,7 +5,7 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBit
 
 client.on('ready', async () => {
   console.log(`[BOT 4] ${client.user.tag} aktif!`);
-  client.user.setPresence({ activities: [{ name: 'Apatheon Profesyonel Hizmet', type: ActivityType.Streaming, url: 'https://www.twitch.tv/discord' }], status: 'online' });
+  client.user.setPresence({ activities: [{ name: '💖Apatheon Profesyonel Hizmet💖', type: ActivityType.Streaming, url: 'https://www.twitch.tv/discord' }], status: 'online' });
   const guild = await client.guilds.fetch('1230989327958282340');
   const channel = await guild.channels.fetch('1536592811187638332');
   if (channel) {
