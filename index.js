@@ -63,14 +63,15 @@ async function startBots() {
             selfMute: false
           });
           console.log(`[BOT ${i + 1}] Ses kanalına bağlandı: ${channel.name}`);
+        } else {
+          console.log(`[BOT ${i + 1}] Kanal bulunamadı! ID: ${botData.channelId}`);
         }
       } catch (error) {
-        console.error(`[BOT ${i + 1}] Hata:`, error);
+        console.error(`[BOT ${i + 1}] Bağlantı Hatası:`, error);
       }
     });
 
     client.login(botData.token);
-    await new Promise(resolve => setTimeout(resolve, 2000));
   }
 }
 
