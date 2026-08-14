@@ -13,10 +13,21 @@ bots.forEach((file, index) => {
   setTimeout(() => {
     console.log(`[BAŞLATILIYOR] ${file}...`);
     
-    // env: process.env ekleyerek Render değişkenlerini botlara geçiriyoruz!
-    spawn('node', [file], { 
-      stdio: 'inherit',
+    // stdio: 'inherit' yerine pipe ve event dinleyicisi ekleyerek logları Render konsoluna zorla basıyoruz
+    const child = spawn('node', [file], { 
       env: process.env 
+    });
+
+    child.stdout.on('data', (data) => {
+      console.log(`[${file} MESAJS]: ${data.toString().trim()}`);
+    });
+
+    child.stderr.on('data', (data) => {
+      console.error(`[${file} HATA]: ${data.toString().trim()}`);
+    });
+
+    child.on('close', (code) => {
+      console.log(`[${file}] kapandı! Çıkış kodu: ${code}`);
     });
 
   }, index * 2000);
