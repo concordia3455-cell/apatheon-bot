@@ -20,7 +20,6 @@ client.on('ready', async () => {
         });
 
         const guild = await client.guilds.fetch('1230989327958282340');
-        // 1. BOTUN KANAL ID'Sİ:
         const channel = await guild.channels.fetch('1536592721324548196'); 
         if (channel) {
             joinVoiceChannel({ 
@@ -37,10 +36,15 @@ client.on('ready', async () => {
     }
 });
 
+// DEBUG LOGLARI
+console.log('[BOT 1] Okunan Token Var mı?:', process.env.BOT_TOKEN_1 ? 'VAR' : 'YOK');
+console.log('[BOT 1] Token Uzunluğu:', process.env.BOT_TOKEN_1 ? process.env.BOT_TOKEN_1.length : 0);
 console.log('[BOT 1] Token ile giriş deneniyor...');
 
-client.login(process.env.BOT_TOKEN_1).then(() => {
-    console.log('[BOT 1] Token kabul edildi!');
-}).catch((err) => {
-    console.error(`[BOT 1 GİRİŞ HATASI]:`, err.message);
-});
+client.login(process.env.BOT_TOKEN_1)
+    .then(() => {
+        console.log('[BOT 1] Token kabul edildi, soket açıldı!');
+    })
+    .catch((err) => {
+        console.error('[BOT 1 GİRİŞ HATASI DETAYI]:', err);
+    });
