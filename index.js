@@ -1,121 +1,183 @@
 const express = require('express');
-const WebSocket = require('ws');
+const { Client, GatewayIntentBits } = require('discord.js');
+const {
+  joinVoiceChannel,
+  VoiceConnectionStatus,
+  entersState
+} = require('@discordjs/voice');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
 
+// ======================================
+// RENDER WEB SERVER
+// ======================================
+
 app.get('/', (req, res) => {
-  res.send('Apatheon Discord Gateway Identify Test');
+  res.status(200).send('Apatheon Discord Voice Test Aktif!');
+});
+
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'apatheon-voice-test'
+  });
 });
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`[WEB] Port ${PORT} dinleniyor.`);
 });
 
+// ======================================
+// AYARLAR
+// ======================================
+
 const TOKEN = process.env.BOT_TOKEN_1;
+
+const GUILD_ID = '1230989327958282340';
+const CHANNEL_ID = '1536592721324548196';
+
+console.log('======================================');
+console.log('[ENV] BOT_TOKEN_1:', TOKEN ? 'VAR' : 'YOK');
+console.log('[ENV] GUILD_ID:', GUILD_ID);
+console.log('[ENV] BOT_CHANNEL_1:', CHANNEL_ID);
+console.log('======================================');
 
 if (!TOKEN) {
   console.error('[HATA] BOT_TOKEN_1 bulunamadı!');
   process.exit(1);
 }
 
-console.log('[TEST] Discord Gateway bağlantısı başlatılıyor...');
+// ======================================
+// DISCORD CLIENT
+// ======================================
 
-const ws = new WebSocket(
-  'wss://gateway.discord.gg/?v=10&encoding=json'
-);
-
-let heartbeatTimer = null;
-
-ws.on('open', () => {
-  console.log('[WS] Gateway WebSocket açıldı.');
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildVoiceStates
+  ]
 });
 
-ws.on('message', (raw) => {
+// ======================================
+// DISCORD LOG
+// ======================================
+
+client.on('debug', (message) => {
+  console.log('[DISCORD DEBUG]', message);
+});
+
+client.on('warn', (message) => {
+  console.warn('[DISCORD WARN]', message);
+});
+
+client.on('error', (error) => {
+  console.error('[DISCORD ERROR]', error);
+});
+
+client.on('shardReady', (id) => {
+  console.log(`[SHARD] Shard ${id} hazır.`);
+});
+
+client.on('shardError', (error) => {
+  console.error('[SHARD ERROR]', error);
+});
+
+// ======================================
+// DISCORD HAZIR
+// ======================================
+
+client.once('clientReady', async () => {
+  console.log('======================================');
+  console.log(`[BOT] ${client.user.tag} Discord'a giriş yaptı!`);
+  console.log('[BOT] Gateway bağlantısı başarılı.');
+  console.log('======================================');
+
   try {
-    const packet = JSON.parse(raw.toString());
+    // SUNUCUYU BUL
+    console.log('[TEST] Sunucu aranıyor...');
 
-    console.log('[WS] Gateway OP:', packet.op);
+    const guild = await client.guilds.fetch(GUILD_ID);
 
-    // OP 10 = Hello
-    if (packet.op === 10) {
-      console.log('[WS] Gateway HELLO alındı.');
+    console.log(
+      `[TEST] Sunucu bulundu: ${guild.name} (${guild.id})`
+    );
 
-      const heartbeatInterval = packet.d.heartbeat_interval;
+    // KANALI BUL
+    console.log('[TEST] Ses kanalı aranıyor...');
 
-      heartbeatTimer = setInterval(() => {
-        ws.send(JSON.stringify({
-          op: 1,
-          d: null
-        }));
+    const channel = await guild.channels.fetch(CHANNEL_ID);
 
-        console.log('[WS] Heartbeat gönderildi.');
-      }, heartbeatInterval);
-
-      // OP 2 = Identify
-      const identify = {
-        op: 2,
-        d: {
-          token: TOKEN,
-          intents: 1,
-          properties: {
-            os: 'linux',
-            browser: 'discord.js-test',
-            device: 'discord.js-test'
-          }
-        }
-      };
-
-      console.log('[WS] IDENTIFY gönderiliyor...');
-
-      ws.send(JSON.stringify(identify));
+    if (!channel) {
+      throw new Error('Ses kanalı bulunamadı!');
     }
 
-    // OP 0 = Dispatch
-    if (packet.op === 0) {
-      console.log('[WS] DISPATCH:', packet.t);
+    console.log(
+      `[TEST] Kanal bulundu: ${channel.name} (${channel.id})`
+    );
 
-      if (packet.t === 'READY') {
-        console.log('======================================');
-        console.log('[BAŞARILI] BOT GATEWAY READY!');
-        console.log('[BAŞARILI] Kullanıcı:', packet.d.user.username);
-        console.log('[BAŞARILI] Bot ID:', packet.d.user.id);
-        console.log('======================================');
-
-        clearInterval(heartbeatTimer);
-      }
+    if (!channel.isVoiceBased()) {
+      throw new Error('Bu kanal bir ses kanalı değil!');
     }
 
-    // OP 9 = Invalid Session
-    if (packet.op === 9) {
-      console.error('======================================');
-      console.error('[HATA] INVALID SESSION');
-      console.error('[HATA] Discord Gateway Identify reddetti.');
-      console.error('======================================');
+    // ==================================
+    // VOICE BAĞLANTISI
+    // ==================================
 
-      clearInterval(heartbeatTimer);
-    }
+    console.log('[VOICE] Ses bağlantısı başlatılıyor...');
+
+    const connection = joinVoiceChannel({
+      channelId: channel.id,
+      guildId: guild.id,
+      adapterCreator: guild.voiceAdapterCreator,
+      selfDeaf: true,
+      selfMute: true
+    });
+
+    connection.on('stateChange', (oldState, newState) => {
+      console.log(
+        `[VOICE] Durum: ${oldState.status} -> ${newState.status}`
+      );
+    });
+
+    connection.on('error', (error) => {
+      console.error('[VOICE ERROR]', error);
+    });
+
+    console.log('[VOICE] READY bekleniyor...');
+
+    await entersState(
+      connection,
+      VoiceConnectionStatus.Ready,
+      30000
+    );
+
+    console.log('======================================');
+    console.log('[VOICE] BAŞARILI!');
+    console.log('[VOICE] Bot ses kanalında READY.');
+    console.log('======================================');
 
   } catch (error) {
-    console.error('[WS] Mesaj parse hatası:', error);
+    console.error('======================================');
+    console.error('[TEST] HATA OLUŞTU!');
+    console.error('[TEST]', error?.message || error);
+    console.error('======================================');
   }
 });
 
-ws.on('error', (error) => {
-  console.error('======================================');
-  console.error('[WS] HATA:', error);
-  console.error('======================================');
-});
+// ======================================
+// LOGIN
+// ======================================
 
-ws.on('close', (code, reason) => {
-  console.log(
-    `[WS] Bağlantı kapandı. Code=${code} Reason=${reason.toString()}`
-  );
+console.log('[BOT] Discord login başlatılıyor...');
 
-  clearInterval(heartbeatTimer);
-});
-
-setTimeout(() => {
-  console.log('[TEST] 30 saniye geçti.');
-  console.log('[TEST] Test tamamlandı.');
-}, 30000);
+client.login(TOKEN)
+  .then(() => {
+    console.log('[BOT] client.login() tamamlandı.');
+  })
+  .catch((error) => {
+    console.error('======================================');
+    console.error('[BOT] LOGIN HATASI');
+    console.error(error);
+    console.error('======================================');
+  });
