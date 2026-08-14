@@ -7,11 +7,14 @@ const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildVoiceStates
-    ] 
+    ],
+    ws: {
+        timeout: 30000 // Gateway zaman aşımını 30 saniyeye çekiyoruz ki kilitlenmesin
+    }
 });
 
 client.on('ready', async () => {
-    console.log(`[BOT 1] ${client.user.tag} ONLINE OLDU!`);
+    console.log(`[BOT 1] >>> ${client.user.tag} BARIŞÇIL ŞEKİLDE ONLINE OLDU! <<<`);
     
     try {
         client.user.setPresence({ 
@@ -29,21 +32,23 @@ client.on('ready', async () => {
                 selfDeaf: true, 
                 selfMute: false 
             });
-            console.log(`[BOT 1] Sese girdi!`);
+            console.log(`[BOT 1] Sese başarıyla girdi!`);
         }
     } catch (err) {
         console.error(`[BOT 1 İÇ HATA]:`, err.message);
     }
 });
 
-// DEBUG LOGLARI
-console.log('[BOT 1] Okunan Token Var mı?:', process.env.BOT_TOKEN_1 ? 'VAR' : 'YOK');
-console.log('[BOT 1] Token Uzunluğu:', process.env.BOT_TOKEN_1 ? process.env.BOT_TOKEN_1.length : 0);
+// HATA YAKALAMA
+client.on('error', (error) => {
+    console.error('[BOT 1 WEBSOCKET HATASI]:', error);
+});
+
 console.log('[BOT 1] Token ile giriş deneniyor...');
 
 client.login(process.env.BOT_TOKEN_1)
     .then(() => {
-        console.log('[BOT 1] Token kabul edildi, soket açıldı!');
+        console.log('[BOT 1] Giriş isteği gönderildi, yanıt bekleniyor...');
     })
     .catch((err) => {
         console.error('[BOT 1 GİRİŞ HATASI DETAYI]:', err);
