@@ -1,3 +1,6 @@
+const dns = require('dns');
+dns.setDefaultResultOrder('ipv4first');
+
 const { Client, GatewayIntentBits } = require('discord.js');
 const { joinVoiceChannel } = require('@discordjs/voice');
 
@@ -11,7 +14,7 @@ const client = new Client({
 });
 
 const GUILD_ID = '1230989327958282340';
-const CHANNEL_ID = '1536592721324548196'; // Welcome 1 Kanalı
+const CHANNEL_ID = '1536592721324548196'; // Welcome 1
 
 client.on('ready', async () => {
   console.log(`[BAŞARILI] Bot 1 giriş yaptı: ${client.user.tag}`);
