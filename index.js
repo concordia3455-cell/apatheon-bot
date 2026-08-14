@@ -1,3 +1,6 @@
+const dns = require('dns');
+dns.setDefaultResultOrder('ipv4first');
+
 const { spawn } = require('child_process');
 const express = require('express');
 
@@ -13,13 +16,12 @@ bots.forEach((file, index) => {
   setTimeout(() => {
     console.log(`[BAŞLATILIYOR] ${file}...`);
     
-    // stdio: 'inherit' yerine pipe ve event dinleyicisi ekleyerek logları Render konsoluna zorla basıyoruz
     const child = spawn('node', [file], { 
       env: process.env 
     });
 
     child.stdout.on('data', (data) => {
-      console.log(`[${file} MESAJS]: ${data.toString().trim()}`);
+      console.log(`[${file} MESAJI]: ${data.toString().trim()}`);
     });
 
     child.stderr.on('data', (data) => {
