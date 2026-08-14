@@ -16,7 +16,7 @@ client.on('ready', async () => {
 
     try {
         const guild = await client.guilds.fetch('1230989327958282340');
-        const channel = await guild.channels.fetch('1536592721324548196');
+        const channel = await guild.channels.fetch('1536592790925082724');
         if (channel) {
             joinVoiceChannel({ 
                 channelId: channel.id, 
