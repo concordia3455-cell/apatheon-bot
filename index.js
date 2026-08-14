@@ -6,54 +6,36 @@ const { Client, GatewayIntentBits, ActivityType } = require('discord.js');
 const {
   joinVoiceChannel,
   VoiceConnectionStatus,
-  entersState,
+  entersState
 } = require('@discordjs/voice');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// Web servis
 app.get('/', (req, res) => {
   res.status(200).send('Apatheon Discord Voice Test Aktif!');
 });
 
 app.get('/health', (req, res) => {
-  res.status(200).json({
-    status: 'ok',
-    bot: 'Apatheon',
-    voiceTest: true
-  });
+  res.json({ status: 'ok' });
 });
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`[WEB] Port ${PORT} dinleniyor.`);
 });
 
-// ===============================
-// RENDER ENVIRONMENT VARIABLES
-// ===============================
-
 const TOKEN = process.env.BOT_TOKEN_1;
-
-// Sabit sunucu ve kanal bilgileri
 const GUILD_ID = '1230989327958282340';
 const CHANNEL_ID = '1536592721324548196';
 
-// ===============================
-// KONTROLLER
-// ===============================
+console.log('[ENV] BOT_TOKEN_1:', TOKEN ? 'VAR' : 'YOK');
+console.log('[ENV] GUILD_ID:', GUILD_ID);
+console.log('[ENV] BOT_CHANNEL_1:', CHANNEL_ID);
 
 if (!TOKEN) {
-  console.error('[HATA] BOT_TOKEN_1 Render Variables bölümünde bulunamadı!');
+  console.error('[HATA] BOT_TOKEN_1 Render Variables içinde yok!');
   process.exit(1);
 }
-
-console.log('[TEST] Sunucu ID:', GUILD_ID);
-console.log('[TEST] Ses Kanalı ID:', CHANNEL_ID);
-
-// ===============================
-// DISCORD CLIENT
-// ===============================
 
 const client = new Client({
   intents: [
@@ -62,8 +44,16 @@ const client = new Client({
   ]
 });
 
+client.on('error', (error) => {
+  console.error('[BOT ERROR]', error);
+});
+
+client.on('debug', (message) => {
+  console.log('[DISCORD DEBUG]', message);
+});
+
 client.once('clientReady', async () => {
-  console.log(`[BOT] ${client.user.tag} giriş yaptı.`);
+  console.log(`[BOT] ${client.user.tag} giriş yaptı!`);
 
   client.user.setPresence({
     activities: [
@@ -77,26 +67,16 @@ client.once('clientReady', async () => {
 
   try {
     const guild = await client.guilds.fetch(GUILD_ID);
-
-    console.log(
-      `[TEST] Sunucu bulundu: ${guild.name} (${guild.id})`
-    );
+    console.log(`[TEST] Sunucu bulundu: ${guild.name}`);
 
     const channel = await guild.channels.fetch(CHANNEL_ID);
 
     if (!channel) {
-      throw new Error('Ses kanalı bulunamadı.');
+      throw new Error('Ses kanalı bulunamadı!');
     }
 
-    console.log(
-      `[TEST] Kanal bulundu: ${channel.name} (${channel.id})`
-    );
-
-    if (!channel.isVoiceBased()) {
-      throw new Error('Belirtilen kanal bir ses kanalı değil.');
-    }
-
-    console.log('[TEST] Voice bağlantısı başlatılıyor...');
+    console.log(`[TEST] Kanal bulundu: ${channel.name}`);
+    console.log('[VOICE] Bağlantı başlatılıyor...');
 
     const connection = joinVoiceChannel({
       channelId: channel.id,
@@ -108,42 +88,43 @@ client.once('clientReady', async () => {
 
     connection.on('stateChange', (oldState, newState) => {
       console.log(
-        `[VOICE] durum: ${oldState.status} -> ${newState.status}`
+        `[VOICE] ${oldState.status} -> ${newState.status}`
       );
     });
 
     connection.on('error', (error) => {
-      console.error('[VOICE] Bağlantı hatası:', error);
+      console.error('[VOICE ERROR]', error);
     });
 
-    try {
-      await entersState(
-        connection,
-        VoiceConnectionStatus.Ready,
-        30000
-      );
+    await entersState(
+      connection,
+      VoiceConnectionStatus.Ready,
+      30000
+    );
 
-      console.log('========================================');
-      console.log('[VOICE] BAŞARILI!');
-      console.log('[VOICE] Bot ses kanalında READY.');
-      console.log('========================================');
-
-    } catch (error) {
-      console.error('[VOICE] READY OLAMADI!');
-      console.error('[VOICE] Hata:', error);
-
-      connection.destroy();
-    }
+    console.log('================================');
+    console.log('[VOICE] BAŞARILI!');
+    console.log('[VOICE] Bot ses kanalında.');
+    console.log('================================');
 
   } catch (error) {
-    console.error('[TEST] Genel hata:', error);
+    console.error('[VOICE] BAŞARISIZ!');
+    console.error('[VOICE]', error);
   }
 });
 
-client.on('error', (error) => {
-  console.error('[BOT] Discord Client hatası:', error);
-});
+console.log('[BOT] Discord login başlatılıyor...');
 
-client.login(TOKEN).catch((error) => {
-  console.error('[BOT] Discord giriş hatası:', error);
-});
+client.login(TOKEN)
+  .then(() => {
+    console.log('[BOT] login() başarılı şekilde tamamlandı.');
+  })
+  .catch((error) => {
+    console.error('[BOT] LOGIN HATASI:', error);
+  });
+
+setTimeout(() => {
+  console.log('[WATCHDOG] 60 saniye geçti. Discord bağlantı durumu:',
+    client.ws.status
+  );
+}, 60000);
