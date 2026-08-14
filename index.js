@@ -10,8 +10,14 @@ app.listen(port, () => console.log(`[SUNUCU] Port ${port} hazır.`));
 const bots = ['bot1.js', 'bot2.js', 'bot3.js', 'bot4.js'];
 
 bots.forEach((file, index) => {
-    setTimeout(() => {
-        console.log(`[BAŞLATILIYOR] ${file}...`);
-        spawn('node', [file], { stdio: 'inherit' });
-    }, index * 2000); // Discord Gateway kilitlenmesin diye 2'şer saniye arayla başlatır
+  setTimeout(() => {
+    console.log(`[BAŞLATILIYOR] ${file}...`);
+    
+    // env: process.env ekleyerek Render değişkenlerini botlara geçiriyoruz!
+    spawn('node', [file], { 
+      stdio: 'inherit',
+      env: process.env 
+    });
+
+  }, index * 2000);
 });
