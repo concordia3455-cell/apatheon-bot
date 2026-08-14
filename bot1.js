@@ -1,17 +1,38 @@
 const { Client, GatewayIntentBits, ActivityType } = require('discord.js');
 const { joinVoiceChannel } = require('@discordjs/voice');
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] });
+console.log('[BOT 1] Kod dosyası okundu, giriş deneniyor...');
 
-client.on('ready', async () => {
-  console.log(`[BOT 1] ${client.user.tag} aktif!`);
-  client.user.setPresence({ activities: [{ name: '💖Apatheon Profesyonel Hizmet💖', type: ActivityType.Streaming, url: 'https://www.twitch.tv/discord' }], status: 'online' });
-  const guild = await client.guilds.fetch('1230989327958282340');
-  const channel = await guild.channels.fetch('1536592721324548196');
-  if (channel) {
-    joinVoiceChannel({ channelId: channel.id, guildId: guild.id, adapterCreator: guild.voiceAdapterCreator, selfDeaf: true, selfMute: false });
-    console.log(`[BOT 1] Sese bağlandı.`);
-  }
+const client = new Client({ 
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] 
 });
 
-client.login(process.env.BOT_TOKEN_1);
+client.on('ready', async () => {
+    console.log(`[BOT 1] ${client.user.tag} başarıyla giriş yaptı!`);
+    client.user.setPresence({ 
+        activities: [{ name: '❤️Apatheon Profesyonel Hizmet❤️', type: ActivityType.Streaming, url: 'https://www.twitch.tv/discord' }], 
+        status: 'online' 
+    });
+
+    try {
+        const guild = await client.guilds.fetch('1230989327958282340');
+        const channel = await guild.channels.fetch('1536592721324548196');
+        if (channel) {
+            joinVoiceChannel({ 
+                channelId: channel.id, 
+                guildId: guild.id, 
+                adapterCreator: guild.voiceAdapterCreator, 
+                selfDeaf: true, 
+                selfMute: false 
+            });
+            console.log(`[BOT 1] Sese başarıyla bağlandı!`);
+        }
+    } catch (err) {
+        console.error(`[BOT 1 SES HATASI]:`, err.message);
+    }
+});
+
+// TOKEN VE GİRİŞ HATASINI EKRANA BASAN KISIM:
+client.login(process.env.BOT_TOKEN_1).catch((err) => {
+    console.error(`[BOT 1 GİRİŞ HATASI]:`, err.message);
+});
