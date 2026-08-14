@@ -4,19 +4,24 @@ const { joinVoiceChannel } = require('@discordjs/voice');
 console.log('[BOT 2] Kod çalıştırılıyor...');
 
 const client = new Client({ 
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] 
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildVoiceStates
+    ] 
 });
 
 client.on('ready', async () => {
-    console.log(`[BOT 2] ${client.user.tag} başarıyla giriş yaptı!`);
-    client.user.setPresence({ 
-        activities: [{ name: '❤️Apatheon Profesyonel Hizmet❤️', type: ActivityType.Streaming, url: 'https://www.twitch.tv/discord' }], 
-        status: 'online' 
-    });
-
+    console.log(`[BOT 2] ${client.user.tag} ONLINE OLDU!`);
+    
     try {
+        client.user.setPresence({ 
+            activities: [{ name: '❤️Apatheon Profesyonel Hizmet❤️', type: ActivityType.Streaming, url: 'https://www.twitch.tv/discord' }], 
+            status: 'online' 
+        });
+
         const guild = await client.guilds.fetch('1230989327958282340');
-        const channel = await guild.channels.fetch('1536592754828902500');
+        // 2. BOTUN KANAL ID'SİNİ BURAYA YAZ:
+        const channel = await guild.channels.fetch('1536592754828902500'); 
         if (channel) {
             joinVoiceChannel({ 
                 channelId: channel.id, 
@@ -25,13 +30,17 @@ client.on('ready', async () => {
                 selfDeaf: true, 
                 selfMute: false 
             });
-            console.log(`[BOT 2] Sese başarıyla bağlandı!`);
+            console.log(`[BOT 2] Sese girdi!`);
         }
     } catch (err) {
-        console.error(`[BOT 2 SES HATASI]:`, err.message);
+        console.error(`[BOT 2 İÇ HATA]:`, err.message);
     }
 });
 
-client.login(process.env.BOT_TOKEN_2).catch((err) => {
+console.log('[BOT 2] Token ile giriş deneniyor...');
+
+client.login(process.env.BOT_TOKEN_2).then(() => {
+    console.log('[BOT 2] Token kabul edildi!');
+}).catch((err) => {
     console.error(`[BOT 2 GİRİŞ HATASI]:`, err.message);
 });
