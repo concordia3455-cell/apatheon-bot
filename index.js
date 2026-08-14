@@ -4,26 +4,14 @@ const express = require('express');
 const app = express();
 const port = process.env.PORT || 10000;
 
-app.get('/', (req, res) => {
-    res.send('Apatheon Bot Sistemleri Canlı!');
-});
+app.get('/', (req, res) => res.send('Apatheon Ses Botları Aktif!'));
+app.listen(port, () => console.log(`[SUNUCU] Port ${port} hazır.`));
 
-app.listen(port, () => {
-    console.log(`[WEB SUNUCUSU] Port ${port} üzerinde dinleniyor.`);
-});
+const bots = ['bot1.js', 'bot2.js', 'bot3.js', 'bot4.js'];
 
-const botFiles = ['bot1.js', 'bot2.js', 'bot3.js', 'bot4.js'];
-
-// Botları 3'er saniye arayla başlatıyoruz ki Discord Gateway ağ kilitlenmesi yaşamasın
-botFiles.forEach((file, index) => {
+bots.forEach((file, index) => {
     setTimeout(() => {
-        console.log(`[ANA YÖNETİCİ] ${file} başlatılıyor...`);
-        
-        // spawn kullanarak tüm logları ve hataları CANLI olarak Render konsoluna aktarıyoruz
-        const child = spawn('node', [file], { stdio: 'inherit' });
-
-        child.on('exit', (code) => {
-            console.log(`[ANA YÖNETİCİ] ${file} kapandı (Kod: ${code})`);
-        });
-    }, index * 3000);
+        console.log(`[BAŞLATILIYOR] ${file}...`);
+        spawn('node', [file], { stdio: 'inherit' });
+    }, index * 2000); // Discord Gateway kilitlenmesin diye 2'şer saniye arayla başlatır
 });
