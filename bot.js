@@ -26,28 +26,15 @@ const CHANNEL_ID =
 
 const GUILD_ID = '1230989327958282340';
 
-console.log('');
-console.log('==========================================');
-console.log(`[BOT ${botId}] BAŞLIYOR`);
-console.log(`[BOT ${botId}] Kanal: ${CHANNEL_ID}`);
-console.log(
-  `[BOT ${botId}] Token: ${TOKEN ? 'VAR' : 'YOK'}`
-);
-console.log('==========================================');
-
-if (!TOKEN) {
-  console.error(
-    `[BOT ${botId}] BOT_TOKEN_${botId} bulunamadı!`
-  );
-  process.exit(1);
-}
-
-// ==========================================
+// =====================================================
 // DURUM
-// ==========================================
+// =====================================================
 
 let ws = null;
 let heartbeatTimer = null;
+let reconnectTimer = null;
+let voiceRetryTimer = null;
+
 let sequence = null;
 let sessionId = null;
 let userId = null;
@@ -56,11 +43,46 @@ let userName = null;
 let voiceConnection = null;
 let voiceMethods = null;
 
-// ==========================================
-// GATEWAY
-// ==========================================
+let voiceConnecting = false;
+let voiceRetryCount = 0;
+let gatewayConnecting = false;
+
+const MAX_VOICE_RETRIES = 20;
+const VOICE_TIMEOUT = 60000;
+const VOICE_RETRY_DELAY = 10000;
+const GATEWAY_RETRY_DELAY = 5000;
+
+// =====================================================
+// BAŞLANGIÇ
+// =====================================================
+
+console.log('');
+console.log('================================================');
+console.log(`[BOT ${botId}] BAŞLIYOR`);
+console.log(`[BOT ${botId}] Kanal: ${CHANNEL_ID}`);
+console.log(
+  `[BOT ${botId}] Token: ${TOKEN ? 'VAR' : 'YOK'}`
+);
+console.log('================================================');
+
+if (!TOKEN) {
+  console.error(
+    `[BOT ${botId}] BOT_TOKEN_${botId} bulunamadı!`
+  );
+  process.exit(1);
+}
+
+// =====================================================
+// GATEWAY BAĞLANTISI
+// =====================================================
 
 function connectGateway() {
+  if (gatewayConnecting) {
+    return;
+  }
+
+  gatewayConnecting = true;
+
   console.log(
     `[BOT ${botId}] Gateway bağlanıyor...`
   );
@@ -70,19 +92,21 @@ function connectGateway() {
   );
 
   ws.on('open', () => {
+    gatewayConnecting = false;
+
     console.log(
       `[BOT ${botId}] Gateway WebSocket açıldı.`
     );
   });
 
-  ws.on('message', (raw) => {
+  ws.on('message', async (raw) => {
     let packet;
 
     try {
       packet = JSON.parse(raw.toString());
     } catch (error) {
       console.error(
-        `[BOT ${botId}] JSON hatası:`,
+        `[BOT ${botId}] Gateway JSON hatası:`,
         error
       );
       return;
@@ -95,9 +119,9 @@ function connectGateway() {
       sequence = packet.s;
     }
 
-    // ========================================
+    // =================================================
     // HELLO
-    // ========================================
+    // =================================================
 
     if (packet.op === 10) {
       console.log(
@@ -106,6 +130,7 @@ function connectGateway() {
 
       if (heartbeatTimer) {
         clearInterval(heartbeatTimer);
+        heartbeatTimer = null;
       }
 
       heartbeatTimer = setInterval(() => {
@@ -113,15 +138,21 @@ function connectGateway() {
           return;
         }
 
-        ws.send(
-          JSON.stringify({
-            op: 1,
-            d: sequence
-          })
-        );
+        try {
+          ws.send(
+            JSON.stringify({
+              op: 1,
+              d: sequence
+            })
+          );
+        } catch (error) {
+          console.error(
+            `[BOT ${botId}] Heartbeat hatası:`,
+            error
+          );
+        }
       }, packet.d.heartbeat_interval);
 
-      // IDENTIFY
       ws.send(
         JSON.stringify({
           op: 2,
@@ -155,9 +186,9 @@ function connectGateway() {
       return;
     }
 
-    // ========================================
+    // =================================================
     // INVALID SESSION
-    // ========================================
+    // =================================================
 
     if (packet.op === 9) {
       console.error(
@@ -167,17 +198,13 @@ function connectGateway() {
       return;
     }
 
-    // ========================================
-    // DISPATCH
-    // ========================================
-
     if (packet.op !== 0) {
       return;
     }
 
-    // ========================================
+    // =================================================
     // READY
-    // ========================================
+    // =================================================
 
     if (packet.t === 'READY') {
       sessionId = packet.d.session_id;
@@ -186,7 +213,7 @@ function connectGateway() {
 
       console.log('');
       console.log(
-        '=========================================='
+        '================================================'
       );
       console.log(
         `[BOT ${botId}] READY`
@@ -198,20 +225,22 @@ function connectGateway() {
         `[BOT ${botId}] ID: ${userId}`
       );
       console.log(
-        '=========================================='
+        `[BOT ${botId}] Kanal: ${CHANNEL_ID}`
+      );
+      console.log(
+        '================================================'
       );
       console.log('');
 
-      setTimeout(() => {
-        startVoice();
-      }, 2000);
+      scheduleVoiceConnect(3000);
 
       return;
     }
 
-    // ========================================
-    // SADECE KENDİ VOICE STATE
-    // ========================================
+    // =================================================
+    // VOICE STATE UPDATE
+    // SADECE BU BOTUN KENDİSİ
+    // =================================================
 
     if (packet.t === 'VOICE_STATE_UPDATE') {
       const data = packet.d;
@@ -230,15 +259,34 @@ function connectGateway() {
       );
 
       if (voiceMethods) {
-        voiceMethods.onVoiceStateUpdate(data);
+        try {
+          voiceMethods.onVoiceStateUpdate(data);
+        } catch (error) {
+          console.error(
+            `[BOT ${botId}] Voice State adapter hatası:`,
+            error
+          );
+        }
+      }
+
+      // Bot kanaldan düştüyse tekrar bağlan
+      if (!data.channel_id) {
+        console.log(
+          `[BOT ${botId}] ` +
+          'Bot ses kanalından ayrılmış.'
+        );
+
+        if (!voiceConnecting) {
+          scheduleVoiceConnect(3000);
+        }
       }
 
       return;
     }
 
-    // ========================================
+    // =================================================
     // VOICE SERVER UPDATE
-    // ========================================
+    // =================================================
 
     if (packet.t === 'VOICE_SERVER_UPDATE') {
       const data = packet.d;
@@ -249,28 +297,58 @@ function connectGateway() {
 
       console.log(
         `[BOT ${botId}] VOICE SERVER -> ` +
-        `${data.endpoint}`
+        `${data.endpoint || 'YOK'}`
       );
 
       if (voiceMethods) {
-        voiceMethods.onVoiceServerUpdate(data);
+        try {
+          voiceMethods.onVoiceServerUpdate(data);
+        } catch (error) {
+          console.error(
+            `[BOT ${botId}] Voice Server adapter hatası:`,
+            error
+          );
+        }
       }
 
       return;
     }
+
+    // =================================================
+    // RESUMED
+    // =================================================
+
+    if (packet.t === 'RESUMED') {
+      console.log(
+        `[BOT ${botId}] Gateway RESUMED.`
+      );
+    }
   });
 
+  // =================================================
+  // GATEWAY ERROR
+  // =================================================
+
   ws.on('error', (error) => {
+    gatewayConnecting = false;
+
     console.error(
       `[BOT ${botId}] Gateway ERROR:`,
       error
     );
   });
 
+  // =================================================
+  // GATEWAY CLOSE
+  // =================================================
+
   ws.on('close', (code, reason) => {
+    gatewayConnecting = false;
+
     console.log(
       `[BOT ${botId}] Gateway kapandı. ` +
-      `code=${code} reason=${reason.toString()}`
+      `code=${code} ` +
+      `reason=${reason.toString()}`
     );
 
     if (heartbeatTimer) {
@@ -278,23 +356,35 @@ function connectGateway() {
       heartbeatTimer = null;
     }
 
-    if (voiceConnection) {
-      try {
-        voiceConnection.destroy();
-      } catch {}
+    destroyVoiceConnection();
 
-      voiceConnection = null;
-    }
-
-    setTimeout(() => {
-      connectGateway();
-    }, 5000);
+    scheduleGatewayReconnect();
   });
 }
 
-// ==========================================
-// CUSTOM VOICE ADAPTER
-// ==========================================
+// =====================================================
+// GATEWAY RECONNECT
+// =====================================================
+
+function scheduleGatewayReconnect() {
+  if (reconnectTimer) {
+    return;
+  }
+
+  console.log(
+    `[BOT ${botId}] ` +
+    `${GATEWAY_RETRY_DELAY / 1000} saniye sonra Gateway yeniden denenecek...`
+  );
+
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    connectGateway();
+  }, GATEWAY_RETRY_DELAY);
+}
+
+// =====================================================
+// VOICE ADAPTER
+// =====================================================
 
 function createVoiceAdapter() {
   return (methods) => {
@@ -307,7 +397,8 @@ function createVoiceAdapter() {
           ws.readyState !== WebSocket.OPEN
         ) {
           console.error(
-            `[BOT ${botId}] Gateway açık değil.`
+            `[BOT ${botId}] ` +
+            'Gateway açık değil, voice payload gönderilemedi.'
           );
 
           return false;
@@ -319,7 +410,8 @@ function createVoiceAdapter() {
           );
 
           console.log(
-            `[BOT ${botId}] GATEWAY OUT -> OP=${payload.op}`
+            `[BOT ${botId}] ` +
+            `[GATEWAY OUT] OP=${payload.op}`
           );
 
           return true;
@@ -335,7 +427,7 @@ function createVoiceAdapter() {
 
       destroy() {
         console.log(
-          `[BOT ${botId}] Voice adapter kapandı.`
+          `[BOT ${botId}] Voice adapter yok edildi.`
         );
 
         voiceMethods = null;
@@ -344,17 +436,107 @@ function createVoiceAdapter() {
   };
 }
 
-// ==========================================
-// VOICE
-// ==========================================
+// =====================================================
+// VOICE BAĞLANTISINI PLANLA
+// =====================================================
+
+function scheduleVoiceConnect(delay = VOICE_RETRY_DELAY) {
+  if (voiceRetryTimer) {
+    return;
+  }
+
+  if (voiceConnection) {
+    const currentStatus =
+      voiceConnection.state?.status;
+
+    if (
+      currentStatus === VoiceConnectionStatus.Ready ||
+      currentStatus === VoiceConnectionStatus.Connecting ||
+      currentStatus === VoiceConnectionStatus.Signalling
+    ) {
+      return;
+    }
+  }
+
+  voiceRetryTimer = setTimeout(() => {
+    voiceRetryTimer = null;
+    startVoice();
+  }, delay);
+}
+
+// =====================================================
+// VOICE BAĞLANTISINI YOK ET
+// =====================================================
+
+function destroyVoiceConnection() {
+  if (!voiceConnection) {
+    voiceMethods = null;
+    voiceConnecting = false;
+    return;
+  }
+
+  try {
+    voiceConnection.destroy();
+  } catch {}
+
+  voiceConnection = null;
+  voiceMethods = null;
+  voiceConnecting = false;
+}
+
+// =====================================================
+// VOICE BAĞLAN
+// =====================================================
 
 async function startVoice() {
+  if (voiceConnecting) {
+    return;
+  }
+
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    console.log(
+      `[BOT ${botId}] ` +
+      'Gateway hazır değil, voice ertelendi.'
+    );
+
+    scheduleVoiceConnect(3000);
+    return;
+  }
+
+  voiceConnecting = true;
+
+  // Mevcut bozuk bağlantı varsa temizle
+  if (voiceConnection) {
+    const currentStatus =
+      voiceConnection.state?.status;
+
+    if (
+      currentStatus !== VoiceConnectionStatus.Ready
+    ) {
+      destroyVoiceConnection();
+    } else {
+      voiceConnecting = false;
+      return;
+    }
+  }
+
+  const attemptNumber = voiceRetryCount + 1;
+
   console.log('');
   console.log(
-    `[BOT ${botId}] Voice bağlanıyor...`
+    '================================================'
+  );
+  console.log(
+    `[BOT ${botId}] VOICE BAĞLANTI DENEMESİ ${attemptNumber}/${MAX_VOICE_RETRIES}`
   );
   console.log(
     `[BOT ${botId}] Kanal=${CHANNEL_ID}`
+  );
+  console.log(
+    `[BOT ${botId}] Timeout=${VOICE_TIMEOUT / 1000}s`
+  );
+  console.log(
+    '================================================'
   );
 
   try {
@@ -373,9 +555,34 @@ async function startVoice() {
       'stateChange',
       (oldState, newState) => {
         console.log(
-          `[BOT ${botId}] [VOICE] ` +
+          `[BOT ${botId}] ` +
+          `[VOICE] ` +
           `${oldState.status} -> ${newState.status}`
         );
+
+        if (
+          newState.status ===
+          VoiceConnectionStatus.Destroyed
+        ) {
+          voiceConnecting = false;
+
+          if (voiceConnection === connection) {
+            voiceConnection = null;
+          }
+
+          if (voiceRetryCount < MAX_VOICE_RETRIES) {
+            scheduleVoiceConnect(
+              VOICE_RETRY_DELAY
+            );
+          }
+        }
+
+        if (
+          newState.status ===
+          VoiceConnectionStatus.Ready
+        ) {
+          voiceRetryCount = 0;
+        }
       }
     );
 
@@ -389,15 +596,24 @@ async function startVoice() {
       }
     );
 
+    console.log(
+      `[BOT ${botId}] ` +
+      'Voice READY bekleniyor...'
+    );
+
     await entersState(
       connection,
       VoiceConnectionStatus.Ready,
-      30000
+      VOICE_TIMEOUT
     );
+
+    // Başarılı
+    voiceRetryCount = 0;
+    voiceConnecting = false;
 
     console.log('');
     console.log(
-      '=========================================='
+      '================================================'
     );
     console.log(
       `[BOT ${botId}] VOICE BAŞARILI!`
@@ -406,43 +622,112 @@ async function startVoice() {
       `[BOT ${botId}] KANALDA BEKLİYOR!`
     );
     console.log(
-      '=========================================='
+      `[BOT ${botId}] Kanal=${CHANNEL_ID}`
+    );
+    console.log(
+      '================================================'
     );
     console.log('');
 
   } catch (error) {
+    voiceConnecting = false;
+
     console.error('');
     console.error(
-      `[BOT ${botId}] VOICE HATASI:`,
+      '================================================'
+    );
+    console.error(
+      `[BOT ${botId}] VOICE BAĞLANTI HATASI`
+    );
+    console.error(
+      `[BOT ${botId}]`,
       error?.message || error
+    );
+    console.error(
+      '================================================'
     );
     console.error('');
 
-    if (voiceConnection) {
-      try {
-        voiceConnection.destroy();
-      } catch {}
+    if (voiceConnection === connection) {
+      voiceConnection = null;
     }
 
-    voiceConnection = null;
+    try {
+      connection.destroy();
+    } catch {}
+
+    voiceMethods = null;
+
+    voiceRetryCount++;
+
+    if (
+      voiceRetryCount <=
+      MAX_VOICE_RETRIES
+    ) {
+      console.log(
+        `[BOT ${botId}] ` +
+        `${VOICE_RETRY_DELAY / 1000} saniye sonra ` +
+        `voice tekrar denenecek ` +
+        `(${voiceRetryCount}/${MAX_VOICE_RETRIES})...`
+      );
+
+      scheduleVoiceConnect(
+        VOICE_RETRY_DELAY
+      );
+    } else {
+      console.error(
+        `[BOT ${botId}] ` +
+        'Maksimum voice deneme sayısına ulaşıldı.'
+      );
+    }
   }
 }
 
-// ==========================================
-// BAŞLAT
-// ==========================================
-
-connectGateway();
-
-// ==========================================
+// =====================================================
 // WATCHDOG
-// ==========================================
+// =====================================================
 
 setInterval(() => {
+  console.log('');
   console.log(
-    `[BOT ${botId}] WATCHDOG -> ` +
-    `user=${userName || 'YOK'} ` +
-    `voice=${voiceConnection?.state?.status || 'YOK'} ` +
-    `channel=${CHANNEL_ID}`
+    '================ WATCHDOG ================'
   );
+
+  console.log(
+    `[BOT ${botId}] ` +
+    `User=${userName || 'YOK'} ` +
+    `ID=${userId || 'YOK'}`
+  );
+
+  console.log(
+    `[BOT ${botId}] ` +
+    `Gateway=${ws?.readyState ?? 'YOK'}`
+  );
+
+  console.log(
+    `[BOT ${botId}] ` +
+    `Voice=${voiceConnection?.state?.status ?? 'YOK'}`
+  );
+
+  console.log(
+    `[BOT ${botId}] ` +
+    `VoiceRetry=${voiceRetryCount}`
+  );
+
+  console.log(
+    `[BOT ${botId}] ` +
+    `Kanal=${CHANNEL_ID}`
+  );
+
+  console.log(
+    '=========================================='
+  );
+  console.log('');
+
 }, 60000);
+
+// =====================================================
+// BAŞLAT
+// =====================================================
+
+connectGateway();
