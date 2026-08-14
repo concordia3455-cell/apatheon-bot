@@ -13,6 +13,10 @@ if (![1, 2, 3, 4].includes(botId)) {
   process.exit(1);
 }
 
+// =====================================================
+// TOKEN / KANAL
+// =====================================================
+
 const TOKEN = process.env[`BOT_TOKEN_${botId}`];
 
 const CHANNEL_ID =
@@ -31,12 +35,14 @@ const GUILD_ID = '1230989327958282340';
 // =====================================================
 
 let ws = null;
+
 let heartbeatTimer = null;
 let reconnectTimer = null;
 let voiceRetryTimer = null;
 
 let sequence = null;
 let sessionId = null;
+
 let userId = null;
 let userName = null;
 
@@ -47,13 +53,20 @@ let voiceConnecting = false;
 let voiceRetryCount = 0;
 let gatewayConnecting = false;
 
+// =====================================================
+// SABİTLER
+// =====================================================
+
 const MAX_VOICE_RETRIES = 20;
+
 const VOICE_TIMEOUT = 60000;
+
 const VOICE_RETRY_DELAY = 10000;
+
 const GATEWAY_RETRY_DELAY = 5000;
 
 // =====================================================
-// BAŞLANGIÇ
+// BOT BAŞLANGIÇ
 // =====================================================
 
 console.log('');
@@ -69,7 +82,56 @@ if (!TOKEN) {
   console.error(
     `[BOT ${botId}] BOT_TOKEN_${botId} bulunamadı!`
   );
+
   process.exit(1);
+}
+
+// =====================================================
+// PRESENCE
+// =====================================================
+
+function sendPresence() {
+  if (
+    !ws ||
+    ws.readyState !== WebSocket.OPEN
+  ) {
+    return;
+  }
+
+  try {
+    ws.send(
+      JSON.stringify({
+        op: 3,
+        d: {
+          since: 0,
+
+          activities: [
+            {
+              name: 'Apatheon Profesyonel Hizmet ❤️',
+
+              type: 1,
+
+              url: 'https://www.twitch.tv/discord'
+            }
+          ],
+
+          status: 'online',
+
+          afk: false
+        }
+      })
+    );
+
+    console.log(
+      `[BOT ${botId}] Yayın durumu gönderildi.`
+    );
+
+  } catch (error) {
+    console.error(
+      `[BOT ${botId}] Presence gönderme hatası:`,
+      error
+    );
+  }
 }
 
 // =====================================================
@@ -91,6 +153,10 @@ function connectGateway() {
     'wss://gateway.discord.gg/?v=10&encoding=json'
   );
 
+  // ===================================================
+  // GATEWAY OPEN
+  // ===================================================
+
   ws.on('open', () => {
     gatewayConnecting = false;
 
@@ -98,6 +164,10 @@ function connectGateway() {
       `[BOT ${botId}] Gateway WebSocket açıldı.`
     );
   });
+
+  // ===================================================
+  // GATEWAY MESSAGE
+  // ===================================================
 
   ws.on('message', async (raw) => {
     let packet;
@@ -109,9 +179,11 @@ function connectGateway() {
         `[BOT ${botId}] Gateway JSON hatası:`,
         error
       );
+
       return;
     }
 
+    // Sequence
     if (
       packet.s !== null &&
       packet.s !== undefined
@@ -130,11 +202,15 @@ function connectGateway() {
 
       if (heartbeatTimer) {
         clearInterval(heartbeatTimer);
+
         heartbeatTimer = null;
       }
 
       heartbeatTimer = setInterval(() => {
-        if (!ws || ws.readyState !== WebSocket.OPEN) {
+        if (
+          !ws ||
+          ws.readyState !== WebSocket.OPEN
+        ) {
           return;
         }
 
@@ -153,26 +229,42 @@ function connectGateway() {
         }
       }, packet.d.heartbeat_interval);
 
+      // =================================================
+      // IDENTIFY
+      // =================================================
+
       ws.send(
         JSON.stringify({
           op: 2,
+
           d: {
             token: TOKEN,
+
             intents: 129,
+
             properties: {
               os: 'linux',
               browser: 'apatheon',
               device: 'apatheon'
             },
+
             presence: {
               since: 0,
+
               activities: [
                 {
-                  name: 'Apatheon Profesyonel Hizmet',
-                  type: 0
+                  name:
+                    '❤️Apatheon Profesyonel Hizmet❤️',
+
+                  type: 1,
+
+                  url:
+                    'https://www.twitch.tv/discord'
                 }
               ],
+
               status: 'online',
+
               afk: false
             }
           }
@@ -207,31 +299,46 @@ function connectGateway() {
     // =================================================
 
     if (packet.t === 'READY') {
-      sessionId = packet.d.session_id;
-      userId = packet.d.user.id;
-      userName = packet.d.user.username;
+      sessionId =
+        packet.d.session_id;
+
+      userId =
+        packet.d.user.id;
+
+      userName =
+        packet.d.user.username;
 
       console.log('');
       console.log(
         '================================================'
       );
+
       console.log(
         `[BOT ${botId}] READY`
       );
+
       console.log(
         `[BOT ${botId}] Kullanıcı: ${userName}`
       );
+
       console.log(
         `[BOT ${botId}] ID: ${userId}`
       );
+
       console.log(
         `[BOT ${botId}] Kanal: ${CHANNEL_ID}`
       );
+
       console.log(
         '================================================'
       );
+
       console.log('');
 
+      // Presence'ı READY sonrasında tekrar gönder
+      sendPresence();
+
+      // Voice bağlantısını biraz beklet
       scheduleVoiceConnect(3000);
 
       return;
@@ -239,17 +346,25 @@ function connectGateway() {
 
     // =================================================
     // VOICE STATE UPDATE
-    // SADECE BU BOTUN KENDİSİ
+    // SADECE KENDİ BOTUMUZ
     // =================================================
 
-    if (packet.t === 'VOICE_STATE_UPDATE') {
+    if (
+      packet.t === 'VOICE_STATE_UPDATE'
+    ) {
       const data = packet.d;
 
-      if (data.guild_id !== GUILD_ID) {
+      // Doğru sunucu
+      if (
+        data.guild_id !== GUILD_ID
+      ) {
         return;
       }
 
-      if (data.user_id !== userId) {
+      // Sadece bu bot
+      if (
+        data.user_id !== userId
+      ) {
         return;
       }
 
@@ -260,16 +375,19 @@ function connectGateway() {
 
       if (voiceMethods) {
         try {
-          voiceMethods.onVoiceStateUpdate(data);
+          voiceMethods.onVoiceStateUpdate(
+            data
+          );
         } catch (error) {
           console.error(
-            `[BOT ${botId}] Voice State adapter hatası:`,
+            `[BOT ${botId}] ` +
+            `Voice State adapter hatası:`,
             error
           );
         }
       }
 
-      // Bot kanaldan düştüyse tekrar bağlan
+      // Bot kanaldan düşerse tekrar bağlan
       if (!data.channel_id) {
         console.log(
           `[BOT ${botId}] ` +
@@ -288,10 +406,14 @@ function connectGateway() {
     // VOICE SERVER UPDATE
     // =================================================
 
-    if (packet.t === 'VOICE_SERVER_UPDATE') {
+    if (
+      packet.t === 'VOICE_SERVER_UPDATE'
+    ) {
       const data = packet.d;
 
-      if (data.guild_id !== GUILD_ID) {
+      if (
+        data.guild_id !== GUILD_ID
+      ) {
         return;
       }
 
@@ -302,10 +424,13 @@ function connectGateway() {
 
       if (voiceMethods) {
         try {
-          voiceMethods.onVoiceServerUpdate(data);
+          voiceMethods.onVoiceServerUpdate(
+            data
+          );
         } catch (error) {
           console.error(
-            `[BOT ${botId}] Voice Server adapter hatası:`,
+            `[BOT ${botId}] ` +
+            `Voice Server adapter hatası:`,
             error
           );
         }
@@ -322,12 +447,14 @@ function connectGateway() {
       console.log(
         `[BOT ${botId}] Gateway RESUMED.`
       );
+
+      sendPresence();
     }
   });
 
-  // =================================================
+  // ===================================================
   // GATEWAY ERROR
-  // =================================================
+  // ===================================================
 
   ws.on('error', (error) => {
     gatewayConnecting = false;
@@ -338,9 +465,9 @@ function connectGateway() {
     );
   });
 
-  // =================================================
+  // ===================================================
   // GATEWAY CLOSE
-  // =================================================
+  // ===================================================
 
   ws.on('close', (code, reason) => {
     gatewayConnecting = false;
@@ -353,6 +480,7 @@ function connectGateway() {
 
     if (heartbeatTimer) {
       clearInterval(heartbeatTimer);
+
       heartbeatTimer = null;
     }
 
@@ -373,13 +501,16 @@ function scheduleGatewayReconnect() {
 
   console.log(
     `[BOT ${botId}] ` +
-    `${GATEWAY_RETRY_DELAY / 1000} saniye sonra Gateway yeniden denenecek...`
+    `${GATEWAY_RETRY_DELAY / 1000} saniye sonra ` +
+    'Gateway yeniden denenecek...'
   );
 
-  reconnectTimer = setTimeout(() => {
-    reconnectTimer = null;
-    connectGateway();
-  }, GATEWAY_RETRY_DELAY);
+  reconnectTimer =
+    setTimeout(() => {
+      reconnectTimer = null;
+
+      connectGateway();
+    }, GATEWAY_RETRY_DELAY);
 }
 
 // =====================================================
@@ -398,7 +529,8 @@ function createVoiceAdapter() {
         ) {
           console.error(
             `[BOT ${botId}] ` +
-            'Gateway açık değil, voice payload gönderilemedi.'
+            'Gateway açık değil, ' +
+            'voice payload gönderilemedi.'
           );
 
           return false;
@@ -415,9 +547,11 @@ function createVoiceAdapter() {
           );
 
           return true;
+
         } catch (error) {
           console.error(
-            `[BOT ${botId}] Voice payload hatası:`,
+            `[BOT ${botId}] ` +
+            'Voice payload hatası:',
             error
           );
 
@@ -427,7 +561,8 @@ function createVoiceAdapter() {
 
       destroy() {
         console.log(
-          `[BOT ${botId}] Voice adapter yok edildi.`
+          `[BOT ${botId}] ` +
+          'Voice adapter yok edildi.'
         );
 
         voiceMethods = null;
@@ -437,10 +572,12 @@ function createVoiceAdapter() {
 }
 
 // =====================================================
-// VOICE BAĞLANTISINI PLANLA
+// VOICE CONNECT PLANLA
 // =====================================================
 
-function scheduleVoiceConnect(delay = VOICE_RETRY_DELAY) {
+function scheduleVoiceConnect(
+  delay = VOICE_RETRY_DELAY
+) {
   if (voiceRetryTimer) {
     return;
   }
@@ -450,28 +587,34 @@ function scheduleVoiceConnect(delay = VOICE_RETRY_DELAY) {
       voiceConnection.state?.status;
 
     if (
-      currentStatus === VoiceConnectionStatus.Ready ||
-      currentStatus === VoiceConnectionStatus.Connecting ||
-      currentStatus === VoiceConnectionStatus.Signalling
+      currentStatus ===
+        VoiceConnectionStatus.Ready ||
+      currentStatus ===
+        VoiceConnectionStatus.Connecting ||
+      currentStatus ===
+        VoiceConnectionStatus.Signalling
     ) {
       return;
     }
   }
 
-  voiceRetryTimer = setTimeout(() => {
-    voiceRetryTimer = null;
-    startVoice();
-  }, delay);
+  voiceRetryTimer =
+    setTimeout(() => {
+      voiceRetryTimer = null;
+
+      startVoice();
+    }, delay);
 }
 
 // =====================================================
-// VOICE BAĞLANTISINI YOK ET
+// VOICE CONNECTION DESTROY
 // =====================================================
 
 function destroyVoiceConnection() {
   if (!voiceConnection) {
     voiceMethods = null;
     voiceConnecting = false;
+
     return;
   }
 
@@ -480,7 +623,9 @@ function destroyVoiceConnection() {
   } catch {}
 
   voiceConnection = null;
+
   voiceMethods = null;
+
   voiceConnecting = false;
 }
 
@@ -493,63 +638,91 @@ async function startVoice() {
     return;
   }
 
-  if (!ws || ws.readyState !== WebSocket.OPEN) {
+  if (
+    !ws ||
+    ws.readyState !== WebSocket.OPEN
+  ) {
     console.log(
       `[BOT ${botId}] ` +
       'Gateway hazır değil, voice ertelendi.'
     );
 
     scheduleVoiceConnect(3000);
+
     return;
   }
 
   voiceConnecting = true;
 
-  // Mevcut bozuk bağlantı varsa temizle
+  // Mevcut bozuk bağlantıyı temizle
   if (voiceConnection) {
     const currentStatus =
       voiceConnection.state?.status;
 
     if (
-      currentStatus !== VoiceConnectionStatus.Ready
+      currentStatus !==
+      VoiceConnectionStatus.Ready
     ) {
       destroyVoiceConnection();
+
     } else {
       voiceConnecting = false;
+
       return;
     }
   }
 
-  const attemptNumber = voiceRetryCount + 1;
+  const attemptNumber =
+    voiceRetryCount + 1;
 
   console.log('');
+
   console.log(
     '================================================'
   );
+
   console.log(
-    `[BOT ${botId}] VOICE BAĞLANTI DENEMESİ ${attemptNumber}/${MAX_VOICE_RETRIES}`
+    `[BOT ${botId}] ` +
+    `VOICE BAĞLANTI DENEMESİ ` +
+    `${attemptNumber}/${MAX_VOICE_RETRIES}`
   );
+
   console.log(
     `[BOT ${botId}] Kanal=${CHANNEL_ID}`
   );
+
   console.log(
-    `[BOT ${botId}] Timeout=${VOICE_TIMEOUT / 1000}s`
+    `[BOT ${botId}] ` +
+    `Timeout=${VOICE_TIMEOUT / 1000}s`
   );
+
   console.log(
     '================================================'
   );
 
   try {
-    const connection = joinVoiceChannel({
-      channelId: CHANNEL_ID,
-      guildId: GUILD_ID,
-      adapterCreator: createVoiceAdapter(),
-      selfDeaf: true,
-      selfMute: true,
-      debug: true
-    });
+    const connection =
+      joinVoiceChannel({
+        channelId: CHANNEL_ID,
 
-    voiceConnection = connection;
+        guildId: GUILD_ID,
+
+        adapterCreator:
+          createVoiceAdapter(),
+
+        selfDeaf: true,
+
+        selfMute: true,
+
+        debug: true
+      });
+
+    voiceConnection =
+      connection;
+
+    // =================================================
+    // STATE CHANGE
+    // =================================================
 
     connection.on(
       'stateChange',
@@ -557,20 +730,28 @@ async function startVoice() {
         console.log(
           `[BOT ${botId}] ` +
           `[VOICE] ` +
-          `${oldState.status} -> ${newState.status}`
+          `${oldState.status} -> ` +
+          `${newState.status}`
         );
 
         if (
           newState.status ===
           VoiceConnectionStatus.Destroyed
         ) {
-          voiceConnecting = false;
+          voiceConnecting =
+            false;
 
-          if (voiceConnection === connection) {
+          if (
+            voiceConnection ===
+            connection
+          ) {
             voiceConnection = null;
           }
 
-          if (voiceRetryCount < MAX_VOICE_RETRIES) {
+          if (
+            voiceRetryCount <
+            MAX_VOICE_RETRIES
+          ) {
             scheduleVoiceConnect(
               VOICE_RETRY_DELAY
             );
@@ -586,11 +767,16 @@ async function startVoice() {
       }
     );
 
+    // =================================================
+    // ERROR
+    // =================================================
+
     connection.on(
       'error',
       (error) => {
         console.error(
-          `[BOT ${botId}] [VOICE ERROR]`,
+          `[BOT ${botId}] ` +
+          `[VOICE ERROR]`,
           error
         );
       }
@@ -603,60 +789,85 @@ async function startVoice() {
 
     await entersState(
       connection,
+
       VoiceConnectionStatus.Ready,
+
       VOICE_TIMEOUT
     );
 
-    // Başarılı
+    // =================================================
+    // BAŞARILI
+    // =================================================
+
     voiceRetryCount = 0;
+
     voiceConnecting = false;
 
     console.log('');
+
     console.log(
       '================================================'
     );
+
     console.log(
       `[BOT ${botId}] VOICE BAŞARILI!`
     );
+
     console.log(
       `[BOT ${botId}] KANALDA BEKLİYOR!`
     );
+
     console.log(
       `[BOT ${botId}] Kanal=${CHANNEL_ID}`
     );
+
     console.log(
       '================================================'
     );
+
     console.log('');
 
   } catch (error) {
-    voiceConnecting = false;
+    voiceConnecting =
+      false;
 
     console.error('');
+
     console.error(
       '================================================'
     );
+
     console.error(
-      `[BOT ${botId}] VOICE BAĞLANTI HATASI`
+      `[BOT ${botId}] ` +
+      'VOICE BAĞLANTI HATASI'
     );
+
     console.error(
       `[BOT ${botId}]`,
-      error?.message || error
+      error?.message ||
+        error
     );
+
     console.error(
       '================================================'
     );
+
     console.error('');
 
-    if (voiceConnection === connection) {
-      voiceConnection = null;
+    if (
+      voiceConnection ===
+      connection
+    ) {
+      voiceConnection =
+        null;
     }
 
     try {
       connection.destroy();
     } catch {}
 
-    voiceMethods = null;
+    voiceMethods =
+      null;
 
     voiceRetryCount++;
 
@@ -668,12 +879,14 @@ async function startVoice() {
         `[BOT ${botId}] ` +
         `${VOICE_RETRY_DELAY / 1000} saniye sonra ` +
         `voice tekrar denenecek ` +
-        `(${voiceRetryCount}/${MAX_VOICE_RETRIES})...`
+        `(${voiceRetryCount}/` +
+        `${MAX_VOICE_RETRIES})...`
       );
 
       scheduleVoiceConnect(
         VOICE_RETRY_DELAY
       );
+
     } else {
       console.error(
         `[BOT ${botId}] ` +
@@ -689,6 +902,7 @@ async function startVoice() {
 
 setInterval(() => {
   console.log('');
+
   console.log(
     '================ WATCHDOG ================'
   );
@@ -722,6 +936,7 @@ setInterval(() => {
   console.log(
     '=========================================='
   );
+
   console.log('');
 
 }, 60000);
