@@ -1,7 +1,7 @@
 const { Client, GatewayIntentBits, ActivityType } = require('discord.js');
 const { joinVoiceChannel } = require('@discordjs/voice');
 
-console.log('[BOT 1] Kod dosyası okundu, giriş deneniyor...');
+console.log('[BOT 1] Kod çalıştırılıyor...');
 
 const client = new Client({ 
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] 
@@ -16,7 +16,8 @@ client.on('ready', async () => {
 
     try {
         const guild = await client.guilds.fetch('1230989327958282340');
-        const channel = await guild.channels.fetch('1536592721324548196');
+        // BURAYA 1. BOTUN GİRECEĞİ KANAL ID'SİNİ YAZ:
+        const channel = await guild.channels.fetch('1536592721324548196'); 
         if (channel) {
             joinVoiceChannel({ 
                 channelId: channel.id, 
@@ -32,7 +33,6 @@ client.on('ready', async () => {
     }
 });
 
-// TOKEN VE GİRİŞ HATASINI EKRANA BASAN KISIM:
 client.login(process.env.BOT_TOKEN_1).catch((err) => {
     console.error(`[BOT 1 GİRİŞ HATASI]:`, err.message);
 });
