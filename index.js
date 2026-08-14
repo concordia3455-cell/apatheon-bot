@@ -35,29 +35,37 @@ app.listen(PORT, '0.0.0.0', () => {
 const GUILD_ID = '1230989327958282340';
 
 // =====================================================
-// 4 BOT AYARLARI
+// BOT AYARLARI
 // =====================================================
 
 const botConfigs = [
   {
     id: 1,
     token: process.env.BOT_TOKEN_1,
-    channelId: process.env.BOT_CHANNEL_1 || '1536592721324548196'
+    channelId:
+      process.env.BOT_CHANNEL_1 ||
+      '1536592721324548196'
   },
   {
     id: 2,
     token: process.env.BOT_TOKEN_2,
-    channelId: process.env.BOT_CHANNEL_2 || '1536592754828902500'
+    channelId:
+      process.env.BOT_CHANNEL_2 ||
+      '1536592754828902500'
   },
   {
     id: 3,
     token: process.env.BOT_TOKEN_3,
-    channelId: process.env.BOT_CHANNEL_3 || '1536592811187638332'
+    channelId:
+      process.env.BOT_CHANNEL_3 ||
+      '1536592811187638332'
   },
   {
     id: 4,
     token: process.env.BOT_TOKEN_4,
-    channelId: process.env.BOT_CHANNEL_4 || '1536592811187638332'
+    channelId:
+      process.env.BOT_CHANNEL_4 ||
+      '1536592811187638332'
   }
 ];
 
@@ -68,7 +76,7 @@ const botConfigs = [
 const botStates = new Map();
 
 // =====================================================
-// BOT BAŞLATMA
+// BOT BAŞLAT
 // =====================================================
 
 function startBot(config) {
@@ -81,11 +89,13 @@ function startBot(config) {
   console.log('');
   console.log('================================================');
   console.log(`[BOT ${id}] BAŞLATILIYOR`);
-  console.log(`Kanal: ${channelId}`);
+  console.log(`[BOT ${id}] Kanal: ${channelId}`);
   console.log('================================================');
 
   if (!token) {
-    console.error(`[BOT ${id}] HATA: BOT_TOKEN_${id} bulunamadı!`);
+    console.error(
+      `[BOT ${id}] HATA: BOT_TOKEN_${id} bulunamadı!`
+    );
     return;
   }
 
@@ -93,12 +103,15 @@ function startBot(config) {
     id,
     token,
     channelId,
+
     ws: null,
     heartbeatTimer: null,
     sequence: null,
+
     sessionId: null,
     userId: null,
     userName: null,
+
     voiceAdapter: null,
     voiceMethods: null,
     voiceConnection: null
@@ -106,9 +119,9 @@ function startBot(config) {
 
   botStates.set(id, state);
 
-  // =================================================
-  // GATEWAY
-  // =================================================
+  // ===================================================
+  // DISCORD GATEWAY
+  // ===================================================
 
   const ws = new WebSocket(
     'wss://gateway.discord.gg/?v=10&encoding=json'
@@ -116,17 +129,19 @@ function startBot(config) {
 
   state.ws = ws;
 
-  // =================================================
+  // ===================================================
   // GATEWAY AÇILDI
-  // =================================================
+  // ===================================================
 
   ws.on('open', () => {
-    console.log(`[BOT ${id}] Gateway WebSocket açıldı.`);
+    console.log(
+      `[BOT ${id}] Gateway WebSocket açıldı.`
+    );
   });
 
-  // =================================================
+  // ===================================================
   // GATEWAY MESAJLARI
-  // =================================================
+  // ===================================================
 
   ws.on('message', async (raw) => {
     let packet;
@@ -154,7 +169,9 @@ function startBot(config) {
     // =================================================
 
     if (packet.op === 10) {
-      console.log(`[BOT ${id}] Gateway HELLO alındı.`);
+      console.log(
+        `[BOT ${id}] Gateway HELLO alındı.`
+      );
 
       const heartbeatInterval =
         packet.d.heartbeat_interval;
@@ -189,20 +206,26 @@ function startBot(config) {
           op: 2,
           d: {
             token: token,
+
+            // GUILDS + GUILD_VOICE_STATES
             intents: 129,
+
             properties: {
               os: 'linux',
               browser: 'apatheon-raw',
               device: 'apatheon-raw'
             },
+
             presence: {
               since: 0,
+
               activities: [
                 {
                   name: 'Apatheon Profesyonel Hizmet',
                   type: 0
                 }
               ],
+
               status: 'online',
               afk: false
             }
@@ -239,25 +262,40 @@ function startBot(config) {
       // -----------------------------------------------
 
       if (packet.t === 'READY') {
-        state.sessionId = packet.d.session_id;
-        state.userId = packet.d.user.id;
-        state.userName = packet.d.user.username;
+        state.sessionId =
+          packet.d.session_id;
+
+        state.userId =
+          packet.d.user.id;
+
+        state.userName =
+          packet.d.user.username;
 
         console.log('');
-        console.log('================================================');
-        console.log(`[BOT ${id}] READY!`);
+        console.log(
+          '================================================'
+        );
+        console.log(
+          `[BOT ${id}] READY!`
+        );
         console.log(
           `[BOT ${id}] Kullanıcı: ${state.userName}`
         );
         console.log(
           `[BOT ${id}] ID: ${state.userId}`
         );
-        console.log('================================================');
+        console.log(
+          `[BOT ${id}] Kanal: ${state.channelId}`
+        );
+        console.log(
+          '================================================'
+        );
+        console.log('');
 
-        // Ses bağlantısını biraz beklet
+        // Botları sırayla ses bağlantısına sok
         setTimeout(() => {
           startVoice(config, state);
-        }, id * 4000);
+        }, 3000);
 
         return;
       }
@@ -269,22 +307,35 @@ function startBot(config) {
       if (packet.t === 'VOICE_STATE_UPDATE') {
         const data = packet.d;
 
+        // Yanlış sunucunun eventini alma
         if (data.guild_id !== GUILD_ID) {
           return;
         }
 
+        // =============================================
+        // ÇOK ÖNEMLİ:
+        // SADECE BU BOTUN KENDİ SES DURUMUNU İŞLE
+        // =============================================
+
+        if (data.user_id !== state.userId) {
+          return;
+        }
+
         console.log(
-          `[BOT ${id}] VOICE_STATE_UPDATE ` +
+          `[BOT ${id}] KENDİ VOICE_STATE_UPDATE -> ` +
           `user=${data.user_id} ` +
           `channel=${data.channel_id}`
         );
 
         if (state.voiceMethods) {
           try {
-            state.voiceMethods.onVoiceStateUpdate(data);
+            state.voiceMethods.onVoiceStateUpdate(
+              data
+            );
           } catch (error) {
             console.error(
-              `[BOT ${id}] Voice State adapter hatası:`,
+              `[BOT ${id}] ` +
+              `Voice State adapter hatası:`,
               error
             );
           }
@@ -305,16 +356,19 @@ function startBot(config) {
         }
 
         console.log(
-          `[BOT ${id}] VOICE_SERVER_UPDATE ` +
+          `[BOT ${id}] VOICE_SERVER_UPDATE -> ` +
           `endpoint=${data.endpoint}`
         );
 
         if (state.voiceMethods) {
           try {
-            state.voiceMethods.onVoiceServerUpdate(data);
+            state.voiceMethods.onVoiceServerUpdate(
+              data
+            );
           } catch (error) {
             console.error(
-              `[BOT ${id}] Voice Server adapter hatası:`,
+              `[BOT ${id}] ` +
+              `Voice Server adapter hatası:`,
               error
             );
           }
@@ -335,9 +389,9 @@ function startBot(config) {
     }
   });
 
-  // =================================================
+  // ===================================================
   // GATEWAY ERROR
-  // =================================================
+  // ===================================================
 
   ws.on('error', (error) => {
     console.error(
@@ -346,18 +400,20 @@ function startBot(config) {
     );
   });
 
-  // =================================================
+  // ===================================================
   // GATEWAY CLOSE
-  // =================================================
+  // ===================================================
 
   ws.on('close', (code, reason) => {
     console.error(
       `[BOT ${id}] Gateway kapandı. ` +
-      `Code=${code} Reason=${reason.toString()}`
+      `Code=${code} ` +
+      `Reason=${reason.toString()}`
     );
 
     if (state.heartbeatTimer) {
       clearInterval(state.heartbeatTimer);
+
       state.heartbeatTimer = null;
     }
 
@@ -365,6 +421,8 @@ function startBot(config) {
       try {
         state.voiceConnection.destroy();
       } catch {}
+
+      state.voiceConnection = null;
     }
   });
 }
@@ -374,21 +432,20 @@ function startBot(config) {
 // =====================================================
 
 function createVoiceAdapter(state) {
-
   return (methods) => {
 
     state.voiceMethods = methods;
 
     const adapter = {
       sendPayload(payload) {
-
         if (
           !state.ws ||
           state.ws.readyState !== WebSocket.OPEN
         ) {
           console.error(
             `[BOT ${state.id}] ` +
-            'Gateway bağlı değil, voice payload gönderilemedi.'
+            'Gateway bağlı değil, ' +
+            'voice payload gönderilemedi.'
           );
 
           return false;
@@ -405,9 +462,7 @@ function createVoiceAdapter(state) {
           );
 
           return true;
-
         } catch (error) {
-
           console.error(
             `[BOT ${state.id}] ` +
             'Voice payload hatası:',
@@ -420,7 +475,8 @@ function createVoiceAdapter(state) {
 
       destroy() {
         console.log(
-          `[BOT ${state.id}] Voice adapter yok edildi.`
+          `[BOT ${state.id}] ` +
+          'Voice adapter yok edildi.'
         );
 
         state.voiceMethods = null;
@@ -430,7 +486,8 @@ function createVoiceAdapter(state) {
     state.voiceAdapter = adapter;
 
     console.log(
-      `[BOT ${state.id}] Voice adapter oluşturuldu.`
+      `[BOT ${state.id}] ` +
+      'Voice adapter oluşturuldu.'
     );
 
     return adapter;
@@ -442,7 +499,6 @@ function createVoiceAdapter(state) {
 // =====================================================
 
 async function startVoice(config, state) {
-
   const {
     id,
     channelId
@@ -457,33 +513,45 @@ async function startVoice(config, state) {
   );
 
   try {
-
     const connection = joinVoiceChannel({
       channelId: channelId,
+
       guildId: GUILD_ID,
-      adapterCreator: createVoiceAdapter(state),
+
+      adapterCreator:
+        createVoiceAdapter(state),
+
       selfDeaf: true,
       selfMute: true,
+
       debug: true
     });
 
     state.voiceConnection = connection;
 
+    // -----------------------------------------------
+    // STATE CHANGE
+    // -----------------------------------------------
+
     connection.on(
       'stateChange',
       (oldState, newState) => {
-
         console.log(
           `[BOT ${id}] ` +
-          `[VOICE] ${oldState.status} -> ${newState.status}`
+          `[VOICE] ` +
+          `${oldState.status} -> ` +
+          `${newState.status}`
         );
       }
     );
 
+    // -----------------------------------------------
+    // ERROR
+    // -----------------------------------------------
+
     connection.on(
       'error',
       (error) => {
-
         console.error(
           `[BOT ${id}] [VOICE ERROR]`,
           error
@@ -492,9 +560,11 @@ async function startVoice(config, state) {
     );
 
     console.log(
-      `[BOT ${id}] Voice READY bekleniyor...`
+      `[BOT ${id}] ` +
+      'Voice READY bekleniyor...'
     );
 
+    // 30 saniye bekle
     await entersState(
       connection,
       VoiceConnectionStatus.Ready,
@@ -502,20 +572,25 @@ async function startVoice(config, state) {
     );
 
     console.log('');
-    console.log('================================================');
+    console.log(
+      '================================================'
+    );
     console.log(
       `[BOT ${id}] VOICE BAŞARILI!`
     );
     console.log(
       `[BOT ${id}] BOT SES KANALINDA READY!`
     );
-    console.log('================================================');
+    console.log(
+      '================================================'
+    );
     console.log('');
 
   } catch (error) {
-
     console.error('');
-    console.error('================================================');
+    console.error(
+      '================================================'
+    );
     console.error(
       `[BOT ${id}] VOICE BAĞLANTI HATASI`
     );
@@ -523,7 +598,9 @@ async function startVoice(config, state) {
       `[BOT ${id}]`,
       error?.message || error
     );
-    console.error('================================================');
+    console.error(
+      '================================================'
+    );
     console.error('');
 
     if (state.voiceConnection) {
@@ -537,15 +614,18 @@ async function startVoice(config, state) {
 }
 
 // =====================================================
-// BOTLARI SIRAYLA BAŞLAT
+// BOTLARI SIRALI BAŞLAT
 // =====================================================
 
-botConfigs.forEach((config, index) => {
+// 0 sn  -> Bot 1
+// 10 sn -> Bot 2
+// 20 sn -> Bot 3
+// 30 sn -> Bot 4
 
+botConfigs.forEach((config, index) => {
   setTimeout(() => {
     startBot(config);
   }, index * 10000);
-
 });
 
 // =====================================================
@@ -553,21 +633,24 @@ botConfigs.forEach((config, index) => {
 // =====================================================
 
 setInterval(() => {
-
   console.log('');
-  console.log('================ WATCHDOG ================');
+  console.log(
+    '================ WATCHDOG ================'
+  );
 
   for (const [id, state] of botStates.entries()) {
-
     console.log(
       `[BOT ${id}] ` +
       `Gateway=${state.ws?.readyState ?? 'YOK'} ` +
       `User=${state.userName ?? 'YOK'} ` +
+      `ID=${state.userId ?? 'YOK'} ` +
       `Voice=${state.voiceConnection?.state?.status ?? 'YOK'}`
     );
   }
 
-  console.log('==========================================');
+  console.log(
+    '=========================================='
+  );
   console.log('');
 
 }, 60000);
