@@ -2,32 +2,42 @@ const { Client, GatewayIntentBits } = require('discord.js');
 const { joinVoiceChannel } = require('@discordjs/voice');
 
 const client = new Client({
-    intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildVoiceStates
-    ]
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
+  ]
 });
+
+const GUILD_ID = '1230989327958282340';
+const CHANNEL_ID = '1536592754828902500'; // Kanal 2
 
 client.on('ready', async () => {
-    console.log(`[BOT 2] ${client.user.tag} bağlandı!`);
-    
-    try {
-        const guild = await client.guilds.fetch('1230989327958282340'); // Sunucu ID
-        const channel = await guild.channels.fetch('1536592754828902500'); // Ses Kanalı ID
-        
-        if (channel) {
-            joinVoiceChannel({
-                channelId: channel.id,
-                guildId: guild.id,
-                adapterCreator: guild.voiceAdapterCreator,
-                selfDeaf: true,
-                selfMute: false
-            });
-            console.log(`[BOT 2] Sese girdi!`);
-        }
-    } catch (err) {
-        console.error(`[BOT 2 HATA]:`, err.message);
+  console.log(`[BAŞARILI] Bot 2 giriş yaptı: ${client.user.tag}`);
+  
+  try {
+    const guild = await client.guilds.fetch(GUILD_ID);
+    const channel = await guild.channels.fetch(CHANNEL_ID);
+
+    if (!channel) {
+      console.error("[HATA - BOT 2]: Kanal bulunamadı!");
+      return;
     }
+
+    joinVoiceChannel({
+      channelId: channel.id,
+      guildId: guild.id,
+      adapterCreator: guild.voiceAdapterCreator,
+      selfDeaf: true,
+      selfMute: true
+    });
+    console.log(`[SES] Bot 2 '${channel.name}' kanalına girdi!`);
+  } catch (err) {
+    console.error("[HATA - BOT 2 SES/GUILD]:", err.message);
+  }
 });
 
-client.login(process.env.BOT_TOKEN_2);
+client.login(process.env.BOT_TOKEN_2)
+  .then(() => console.log("[BAŞARILI] Bot 2 token doğrulandı, Discord'a bağlanıyor..."))
+  .catch((err) => console.error("[CRITICAL HATA - BOT 2 LOGIN]:", err.message));
