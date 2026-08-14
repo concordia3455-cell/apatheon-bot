@@ -11,11 +11,11 @@ const client = new Client({
 });
 
 const GUILD_ID = '1230989327958282340';
-const CHANNEL_ID = '1536592811187638332'; // Kanal 4
+const CHANNEL_ID = '1536592931442180126'; // Welcome 4 Kanalı
 
 client.on('ready', async () => {
   console.log(`[BAŞARILI] Bot 4 giriş yaptı: ${client.user.tag}`);
-  
+
   try {
     const guild = await client.guilds.fetch(GUILD_ID);
     const channel = await guild.channels.fetch(CHANNEL_ID);
@@ -38,6 +38,8 @@ client.on('ready', async () => {
   }
 });
 
+console.log("[BOT 4] Discord'a bağlanma isteği gönderiliyor...");
+
 client.login(process.env.BOT_TOKEN_4)
-  .then(() => console.log("[BAŞARILI] Bot 4 token doğrulandı, Discord'a bağlanıyor..."))
-  .catch((err) => console.error("[CRITICAL HATA - BOT 4 LOGIN]:", err.message));
+  .then(() => console.log("[BOT 4] Login isteği iletildi!"))
+  .catch((err) => console.error("[BOT 4 LOGIN HATASI]:", err.message));
