@@ -5,54 +5,117 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 
 app.get('/', (req, res) => {
-  res.send('Apatheon Gateway Network Test');
+  res.send('Apatheon Discord Gateway Identify Test');
 });
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`[WEB] Port ${PORT} dinleniyor.`);
 });
 
-console.log('[TEST] Discord Gateway WebSocket bağlantısı deneniyor...');
+const TOKEN = process.env.BOT_TOKEN_1;
+
+if (!TOKEN) {
+  console.error('[HATA] BOT_TOKEN_1 bulunamadı!');
+  process.exit(1);
+}
+
+console.log('[TEST] Discord Gateway bağlantısı başlatılıyor...');
 
 const ws = new WebSocket(
   'wss://gateway.discord.gg/?v=10&encoding=json'
 );
 
-const timeout = setTimeout(() => {
-  console.error('[WS TEST] 15 saniyede bağlantı kurulamadı.');
-  console.error('[WS TEST] Sonuç: TIMEOUT');
-  ws.close();
-}, 15000);
+let heartbeatTimer = null;
 
 ws.on('open', () => {
-  clearTimeout(timeout);
-
-  console.log('================================');
-  console.log('[WS TEST] BAŞARILI!');
-  console.log('[WS TEST] Discord Gateway WebSocket açıldı.');
-  console.log('================================');
-
-  ws.close();
+  console.log('[WS] Gateway WebSocket açıldı.');
 });
 
-ws.on('message', (data) => {
-  console.log('[WS TEST] Gateway mesajı alındı:');
-  console.log(data.toString());
+ws.on('message', (raw) => {
+  try {
+    const packet = JSON.parse(raw.toString());
+
+    console.log('[WS] Gateway OP:', packet.op);
+
+    // OP 10 = Hello
+    if (packet.op === 10) {
+      console.log('[WS] Gateway HELLO alındı.');
+
+      const heartbeatInterval = packet.d.heartbeat_interval;
+
+      heartbeatTimer = setInterval(() => {
+        ws.send(JSON.stringify({
+          op: 1,
+          d: null
+        }));
+
+        console.log('[WS] Heartbeat gönderildi.');
+      }, heartbeatInterval);
+
+      // OP 2 = Identify
+      const identify = {
+        op: 2,
+        d: {
+          token: TOKEN,
+          intents: 1,
+          properties: {
+            os: 'linux',
+            browser: 'discord.js-test',
+            device: 'discord.js-test'
+          }
+        }
+      };
+
+      console.log('[WS] IDENTIFY gönderiliyor...');
+
+      ws.send(JSON.stringify(identify));
+    }
+
+    // OP 0 = Dispatch
+    if (packet.op === 0) {
+      console.log('[WS] DISPATCH:', packet.t);
+
+      if (packet.t === 'READY') {
+        console.log('======================================');
+        console.log('[BAŞARILI] BOT GATEWAY READY!');
+        console.log('[BAŞARILI] Kullanıcı:', packet.d.user.username);
+        console.log('[BAŞARILI] Bot ID:', packet.d.user.id);
+        console.log('======================================');
+
+        clearInterval(heartbeatTimer);
+      }
+    }
+
+    // OP 9 = Invalid Session
+    if (packet.op === 9) {
+      console.error('======================================');
+      console.error('[HATA] INVALID SESSION');
+      console.error('[HATA] Discord Gateway Identify reddetti.');
+      console.error('======================================');
+
+      clearInterval(heartbeatTimer);
+    }
+
+  } catch (error) {
+    console.error('[WS] Mesaj parse hatası:', error);
+  }
 });
 
 ws.on('error', (error) => {
-  clearTimeout(timeout);
-
-  console.error('================================');
-  console.error('[WS TEST] HATA!');
-  console.error(error);
-  console.error('================================');
+  console.error('======================================');
+  console.error('[WS] HATA:', error);
+  console.error('======================================');
 });
 
 ws.on('close', (code, reason) => {
-  clearTimeout(timeout);
-
   console.log(
-    `[WS TEST] Bağlantı kapandı. Code=${code} Reason=${reason.toString()}`
+    `[WS] Bağlantı kapandı. Code=${code} Reason=${reason.toString()}`
   );
+
+  clearInterval(heartbeatTimer);
 });
+
+setTimeout(() => {
+  console.log('[TEST] 30 saniye geçti.');
+  console.log('[TEST] Test tamamlandı.');
+}, 30000);
