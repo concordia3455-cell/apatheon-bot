@@ -1,10 +1,14 @@
-// Apatheon - Hoş geldin kartı oluşturucu (v2 - HUD tasarım)
+// Apatheon - Hoş geldin kartı oluşturucu (v3 - HUD tasarım, HD)
 const path = require('path');
 const fs = require('fs');
 const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
 
 const BG_DIR = path.join(__dirname, 'backgrounds');
 const FONT_DIR = path.join(__dirname, 'fonts');
+
+// HD çıktı: 1100x560 koordinatlarında çizilir, 2 kat çözünürlükte (2200x1120) üretilir.
+// Dosya çok büyük gelirse 1.5 yapabilirsin.
+const SCALE = 2;
 
 // ---- Fontlar (Türkçe destekli Poppins) ----
 const reg = (file, name) => {
@@ -23,6 +27,12 @@ const THEMES = [
   { match: /zumrut/i,  accent: '#2fe3a0', light: '#bdf7de' },
 ];
 const themeOf = f => THEMES.find(t => t.match.test(f || '')) || THEMES[0];
+
+// Özel sayılar (100'ün katı: gümüş, 500'ün katı: altın)
+const MILESTONE_THEMES = {
+  gold:   { accent: '#ffc233', light: '#ffe8a3', label: 'ALTIN ÜYE' },
+  silver: { accent: '#b8c4d9', light: '#f1f5fb', label: 'ÖZEL ÜYE' },
+};
 
 function listBackgrounds() {
   if (!fs.existsSync(BG_DIR)) return [];
@@ -101,16 +111,43 @@ function bracket(ctx, x, y, sx, sy, len) {
   ctx.moveTo(x, y + sy * len); ctx.lineTo(x, y); ctx.lineTo(x + sx * len, y);
   ctx.stroke();
 }
+function star(ctx, x, y, r) {
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + i * Math.PI / 5;
+    const rad = i % 2 === 0 ? r : r * 0.45;
+    const px = x + Math.cos(a) * rad, py = y + Math.sin(a) * rad;
+    if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py);
+  }
+  ctx.closePath();
+}
+function sparkles(ctx, W, H, color, n) {
+  ctx.save();
+  for (let i = 0; i < n; i++) {
+    const x = Math.random() * W, y = 20 + Math.random() * H * 0.72;
+    const r = 0.8 + Math.random() * 2.2;
+    ctx.globalAlpha = 0.12 + Math.random() * 0.55;
+    ctx.fillStyle = Math.random() < 0.5 ? '#ffffff' : color;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
 
 /**
- * o: { avatarURL, username, serverName, count, createdAt, joinedAt, background, footer }
+ * o: { avatarURL, username, serverName, count, createdAt, joinedAt, background, footer, milestone }
+ * milestone: 'gold' | 'silver' | null
  */
 async function makeWelcomeImage(o) {
   const W = 1100, H = 560, cx = W / 2;
-  const canvas = createCanvas(W, H);
+  const canvas = createCanvas(W * SCALE, H * SCALE);
   const ctx = canvas.getContext('2d');
+  ctx.scale(SCALE, SCALE);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+
   const file = pickBackground(o.background);
-  const th = themeOf(file);
+  const ms = o.milestone && MILESTONE_THEMES[o.milestone] ? MILESTONE_THEMES[o.milestone] : null;
+  const th = ms || themeOf(file);
   const username = clean(o.username, 'Yeni Üye');
   const serverName = clean(o.serverName, 'Apatheon');
 
@@ -124,14 +161,22 @@ async function makeWelcomeImage(o) {
     g.addColorStop(0, '#120a2a'); g.addColorStop(1, '#2f1a63');
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   }
-  ctx.fillStyle = 'rgba(0,0,0,0.08)'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = 'rgba(0,0,0,0.10)'; ctx.fillRect(0, 0, W, H);
   const vg = ctx.createLinearGradient(0, 0, 0, H);
-  vg.addColorStop(0, 'rgba(0,0,0,0.20)'); vg.addColorStop(0.4, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.55)');
+  vg.addColorStop(0, 'rgba(0,0,0,0.22)'); vg.addColorStop(0.4, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.60)');
   ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+
+  // Avatarın arkasında yumuşak ışık huzmesi
+  const bloom = ctx.createRadialGradient(cx, 170, 20, cx, 170, 430);
+  bloom.addColorStop(0, th.accent + '40'); bloom.addColorStop(1, th.accent + '00');
+  ctx.fillStyle = bloom; ctx.fillRect(0, 0, W, H);
+
+  // Işıltılar
+  sparkles(ctx, W, H, th.light, ms ? 70 : 42);
 
   // 2) Çerçeve + köşe braketleri
   ctx.save();
-  ctx.strokeStyle = 'rgba(255,255,255,0.30)'; ctx.lineWidth = 2;
+  ctx.strokeStyle = ms ? th.accent + 'aa' : 'rgba(255,255,255,0.30)'; ctx.lineWidth = 2;
   rr(ctx, 16, 16, W - 32, H - 32, 22); ctx.stroke();
   ctx.strokeStyle = th.accent; ctx.lineWidth = 4; ctx.lineCap = 'round';
   ctx.shadowColor = th.accent; ctx.shadowBlur = 14;
@@ -139,7 +184,16 @@ async function makeWelcomeImage(o) {
   bracket(ctx, 16, H - 16, 1, -1, 46); bracket(ctx, W - 16, H - 16, -1, -1, 46);
   ctx.restore();
 
-  // 3) Üst bilgi (büyük)
+  // Özel sayı: ikinci parlak çerçeve
+  if (ms) {
+    ctx.save();
+    ctx.strokeStyle = th.accent; ctx.globalAlpha = 0.55; ctx.lineWidth = 2;
+    ctx.shadowColor = th.accent; ctx.shadowBlur = 18;
+    rr(ctx, 27, 27, W - 54, H - 54, 16); ctx.stroke();
+    ctx.restore();
+  }
+
+  // 3) Üst bilgi
   ctx.textBaseline = 'middle';
   ctx.fillStyle = th.accent; ctx.beginPath(); ctx.arc(60, 58, 7, 0, Math.PI * 2); ctx.fill();
   ctx.font = `26px ${F_BOLD}`; ctx.fillStyle = '#ffffff'; ctx.textAlign = 'left';
@@ -148,6 +202,27 @@ async function makeWelcomeImage(o) {
   ctx.shadowBlur = 0;
   ctx.textAlign = 'right'; ctx.font = `20px ${F_MED}`; ctx.fillStyle = 'rgba(255,255,255,0.75)';
   ctx.fillText(fmtDate(new Date()), W - 60, 58);
+
+  // Özel sayı rozeti (üst orta)
+  if (ms) {
+    ctx.font = `16px ${F_BOLD}`;
+    const lw = spacedWidth(ctx, ms.label, 3) + 96;
+    ctx.save();
+    rr(ctx, cx - lw / 2, 40, lw, 36, 18);
+    const pg = ctx.createLinearGradient(cx - lw / 2, 0, cx + lw / 2, 0);
+    pg.addColorStop(0, 'rgba(0,0,0,0.65)'); pg.addColorStop(0.5, 'rgba(30,22,6,0.75)'); pg.addColorStop(1, 'rgba(0,0,0,0.65)');
+    ctx.fillStyle = pg; ctx.fill();
+    ctx.strokeStyle = th.accent; ctx.lineWidth = 2;
+    ctx.shadowColor = th.accent; ctx.shadowBlur = 12; ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = th.accent;
+    star(ctx, cx - lw / 2 + 26, 58, 8); ctx.fill();
+    star(ctx, cx + lw / 2 - 26, 58, 8); ctx.fill();
+    ctx.restore();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `16px ${F_BOLD}`; ctx.fillStyle = th.light;
+    spaced(ctx, ms.label, cx, 58, 3);
+  }
 
   // 4) Avatar: büyük HUD halkası
   const ay = 176, ar = 80;
@@ -179,7 +254,7 @@ async function makeWelcomeImage(o) {
   catch { ctx.fillStyle = '#5865F2'; ctx.fillRect(cx - ar, ay - ar, ar * 2, ar * 2); }
   ctx.restore();
 
-  // 5) Başlık + kullanıcı adı (büyük)
+  // 5) Başlık + kullanıcı adı
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.font = `26px ${F_BOLD}`;
   const title = 'HOŞ GELDİN', tw = spacedWidth(ctx, title, 12);
@@ -200,7 +275,7 @@ async function makeWelcomeImage(o) {
   ctx.fillStyle = ng; ctx.fillText(username, cx, 358);
   ctx.shadowBlur = 0;
 
-  // 6) Bilgi kartları (büyük yazı)
+  // 6) Bilgi kartları (cam efekti)
   const created = o.createdAt ? new Date(o.createdAt) : null;
   const joined = o.joinedAt ? new Date(o.joinedAt) : new Date();
   const isNew = created && (Date.now() - created.getTime()) < 7 * 86400000;
@@ -208,22 +283,35 @@ async function makeWelcomeImage(o) {
   const cards = [
     { label: "DISCORD'A KATILDI", value: created ? fmtDate(created) : '-', sub: created ? (isNew ? 'Yeni hesap · ' + ago(created) : ago(created)) : '', warn: isNew },
     { label: 'SUNUCUYA KATILDI', value: fmtDate(joined), sub: ago(joined) },
-    { label: 'ÜYE SIRASI', value: `#${cnt}`, sub: `${cnt}. üyemiz` },
+    { label: 'ÜYE SIRASI', value: `#${cnt}`, sub: ms ? `${cnt}. üyemiz · Özel sayı` : `${cnt}. üyemiz`, gold: !!ms },
   ];
   const gap = 16, pad = 56, ch = 106, cy0 = 408, cw = (W - pad * 2 - gap * 2) / 3;
   cards.forEach((c, i) => {
     const x = pad + i * (cw + gap);
     ctx.save();
     rr(ctx, x, cy0, cw, ch, 18);
-    ctx.fillStyle = 'rgba(8,6,20,0.70)'; ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.20)'; ctx.lineWidth = 1.5; ctx.stroke();
-    ctx.fillStyle = th.accent; rr(ctx, x + 16, cy0 + 22, 4, ch - 44, 2); ctx.fill();
+    const cg = ctx.createLinearGradient(0, cy0, 0, cy0 + ch);
+    cg.addColorStop(0, 'rgba(34,28,60,0.80)'); cg.addColorStop(1, 'rgba(8,6,20,0.82)');
+    ctx.fillStyle = cg; ctx.fill();
+    ctx.strokeStyle = c.gold ? th.accent : 'rgba(255,255,255,0.22)'; ctx.lineWidth = c.gold ? 2 : 1.5;
+    if (c.gold) { ctx.shadowColor = th.accent; ctx.shadowBlur = 14; }
+    ctx.stroke();
     ctx.restore();
+
+    // üst kenarda ince parlama çizgisi
+    ctx.save();
+    rr(ctx, x, cy0, cw, ch, 18); ctx.clip();
+    const hl = ctx.createLinearGradient(x, 0, x + cw, 0);
+    hl.addColorStop(0, th.accent + '00'); hl.addColorStop(0.5, th.accent + 'aa'); hl.addColorStop(1, th.accent + '00');
+    ctx.fillStyle = hl; ctx.fillRect(x, cy0, cw, 2);
+    ctx.restore();
+
+    ctx.fillStyle = th.accent; rr(ctx, x + 16, cy0 + 22, 4, ch - 44, 2); ctx.fill();
     ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
     ctx.font = `15px ${F_BOLD}`; ctx.fillStyle = th.accent;
     let lx = x + 36; [...c.label].forEach(k => { ctx.fillText(k, lx, cy0 + 26); lx += ctx.measureText(k).width + 1.5; });
     fit(ctx, c.value, F_BOLD, cw - 56, 32, 18);
-    ctx.fillStyle = '#ffffff'; ctx.fillText(c.value, x + 36, cy0 + 60);
+    ctx.fillStyle = c.gold ? th.light : '#ffffff'; ctx.fillText(c.value, x + 36, cy0 + 60);
     ctx.font = `17px ${F_MED}`; ctx.fillStyle = c.warn ? '#ffc861' : 'rgba(255,255,255,0.75)';
     ctx.fillText(c.sub, x + 36, cy0 + 88);
   });
