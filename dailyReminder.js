@@ -119,7 +119,7 @@ function startDailyReminder({ token, guildId, tag = '[GÜNLÜK]' }) {
         type: 17,
         accent_color: COLOR,
         components: [
-          { type: 10, content: `### 📌 Apatheon'dan hatırlatma\n${intro}\n\n${roleLines()}` },
+          { type: 10, content: `## 📌 Apatheon'dan hatırlatma\n### ${intro}\n\n${roleLines()}` },
           { type: 14, divider: true, spacing: 1 },
           { type: 10, content: ticketLine() },
           ...buttonRow(),
