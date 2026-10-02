@@ -139,8 +139,40 @@ if (!TOKEN) {
 }
 
 // =====================================================
-// PRESENCE
+// PRESENCE (DÖNEN DURUMLAR)
 // =====================================================
+
+const STATUS_INTERVAL = 20000; // 20 sn (altına düşme, Discord sınırı var)
+let statusIndex = botId - 1;   // her bot farklı durumdan başlasın
+let statusTimer = null;
+let memberCountTimer = null;
+let memberCount = null;
+
+function getStatuses() {
+  const list = [
+    '❤️Apatheon Profesyonel Hizmet❤️',
+    '👋 Yeni üyeleri karşılıyor',
+    "✨ Apatheon'a hoş geldin!",
+    '🔒 Güvenli ve hızlı kayıt sistemi',
+    '🚀 Apatheon ile fark yarat'
+  ];
+
+  if (memberCount) {
+    list.splice(2, 0, `👥 ${memberCount} üyeye hizmet veriyor`);
+  }
+
+  return list;
+}
+
+function currentActivity() {
+  const list = getStatuses();
+
+  return {
+    name: list[statusIndex % list.length],
+    type: 1,
+    url: 'https://www.twitch.tv/discord'
+  };
+}
 
 function sendPresence() {
   if (
@@ -156,26 +188,63 @@ function sendPresence() {
         op: 3,
         d: {
           since: 0,
-          activities: [
-            {
-              name: '❤️Apatheon Profesyonel Hizmet❤️',
-              type: 1,
-              url: 'https://www.twitch.tv/discord'
-            }
-          ],
+          activities: [currentActivity()],
           status: 'online',
           afk: false
         }
       })
     );
-
-    console.log(
-      `[BOT ${botId}] Yayın durumu gönderildi.`
-    );
   } catch (error) {
     console.error(
       `[BOT ${botId}] Presence gönderme hatası:`,
       error
+    );
+  }
+}
+
+async function refreshMemberCount() {
+  try {
+    const res = await fetch(
+      `https://discord.com/api/v10/guilds/${GUILD_ID}?with_counts=true`,
+      { headers: { Authorization: `Bot ${TOKEN}` } }
+    );
+
+    if (!res.ok) {
+      console.error(
+        `[BOT ${botId}] Üye sayısı alınamadı: ${res.status}`
+      );
+      return;
+    }
+
+    const data = await res.json();
+
+    if (data.approximate_member_count) {
+      memberCount = data.approximate_member_count;
+    }
+  } catch (error) {
+    console.error(
+      `[BOT ${botId}] Üye sayısı hatası:`,
+      error?.message || error
+    );
+  }
+}
+
+function startStatusRotation() {
+  if (statusTimer) {
+    clearInterval(statusTimer);
+  }
+
+  statusTimer = setInterval(() => {
+    statusIndex++;
+    sendPresence();
+  }, STATUS_INTERVAL);
+
+  // Üye sayısını 5 dakikada bir yenile (bir kez başlat)
+  if (!memberCountTimer) {
+    refreshMemberCount().then(sendPresence);
+    memberCountTimer = setInterval(
+      refreshMemberCount,
+      5 * 60 * 1000
     );
   }
 }
@@ -281,13 +350,7 @@ function connectGateway() {
             },
             presence: {
               since: 0,
-              activities: [
-                {
-                  name: '❤️Apatheon Profesyonel Hizmet❤️',
-                  type: 1,
-                  url: 'https://www.twitch.tv/discord'
-                }
-              ],
+              activities: [currentActivity()],
               status: 'online',
               afk: false
             }
@@ -348,6 +411,7 @@ function connectGateway() {
       console.log('');
 
       sendPresence();
+      startStatusRotation();
 
       scheduleVoiceConnect(3000);
 
@@ -512,6 +576,11 @@ function connectGateway() {
     if (heartbeatTimer) {
       clearInterval(heartbeatTimer);
       heartbeatTimer = null;
+    }
+
+    if (statusTimer) {
+      clearInterval(statusTimer);
+      statusTimer = null;
     }
 
     // Server Members Intent kapalıysa: hoş geldin özelliğini kapat,
