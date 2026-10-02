@@ -1,12 +1,13 @@
 // Apatheon - Hoş geldin sistemi (ham gateway eventleri + Discord REST)
 // discord.js KULLANMAZ. bot.js içinden event'ler buraya iletilir.
-const { makeWelcomeImage } = require('./welcome');
+const { makeWelcomeImage, clean } = require('./welcome');
 
 const DISCORD_EPOCH = 1420070400000n;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 function createWelcomeSystem({ token, guildId, channelId, tag = '[WELCOME]', background = 'random' }) {
-  let guildName = 'Apatheon';
+  // Kartta görünen sunucu adı (süslü Unicode harfler fonta uymadığı için sabit)
+  const guildName = process.env.WELCOME_SERVER_NAME || 'Apatheon';
   let memberCount = null;
 
   const snowflakeDate = id => new Date(Number((BigInt(id) >> 22n) + DISCORD_EPOCH));
@@ -60,7 +61,6 @@ function createWelcomeSystem({ token, guildId, channelId, tag = '[WELCOME]', bac
   return {
     onGuildCreate(d) {
       if (d.id !== guildId) return;
-      guildName = d.name || guildName;
       if (typeof d.member_count === 'number') memberCount = d.member_count;
     },
 
@@ -77,7 +77,7 @@ function createWelcomeSystem({ token, guildId, channelId, tag = '[WELCOME]', bac
       if (!user || user.bot) return;
 
       const count = memberCount ?? (await fetchMemberCount()) ?? 0;
-      const name = d.nick || user.global_name || user.username;
+      const name = [d.nick, user.global_name, user.username].map(n => clean(n)).find(Boolean) || 'Yeni Üye';
 
       const png = await makeWelcomeImage({
         avatarURL: avatarUrl(user),
