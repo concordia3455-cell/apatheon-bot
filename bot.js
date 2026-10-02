@@ -31,6 +31,63 @@ const CHANNEL_ID =
 const GUILD_ID = '1230989327958282340';
 
 // =====================================================
+// HOŞ GELDİN SİSTEMİ AYARLARI
+// Sadece WELCOME_BOT_ID'deki bot hoş geldin görseli atar.
+// (Render > Environment ile değiştirilebilir)
+// =====================================================
+
+const WELCOME_BOT_ID = Number(process.env.WELCOME_BOT_ID || 1);
+
+const WELCOME_CHANNEL_ID =
+  process.env.WELCOME_CHANNEL_ID || '1452657671609258135';
+
+const IS_WELCOME_BOT = botId === WELCOME_BOT_ID;
+
+// GUILD_MEMBERS (privileged) intent'i sadece hoş geldin botunda açılır.
+// Developer Portal'da kapalıysa Discord 4014 ile reddeder; aşağıda
+// otomatik kapatılıp ses sistemi etkilenmeden devam edilir.
+let welcomeIntentOn = IS_WELCOME_BOT;
+let welcomeSystem = null;
+
+// GUILDS(1) + GUILD_VOICE_STATES(128) [+ GUILD_MEMBERS(2)]
+function currentIntents() {
+  return welcomeIntentOn ? (129 | 2) : 129;
+}
+
+function initWelcome() {
+  if (!IS_WELCOME_BOT) {
+    return;
+  }
+
+  try {
+    const { createWelcomeSystem } = require('./welcomeSystem');
+
+    welcomeSystem = createWelcomeSystem({
+      token: TOKEN,
+      guildId: GUILD_ID,
+      channelId: WELCOME_CHANNEL_ID,
+      tag: `[BOT ${botId}] [WELCOME]`,
+      background: 'random'
+    });
+
+    console.log(
+      `[BOT ${botId}] Hoş geldin sistemi AKTİF -> ` +
+      `kanal=${WELCOME_CHANNEL_ID}`
+    );
+  } catch (error) {
+    // Canvas vs. yüklenemezse ses botu çalışmaya devam eder
+    welcomeSystem = null;
+    welcomeIntentOn = false;
+
+    console.error(
+      `[BOT ${botId}] Hoş geldin sistemi yüklenemedi ` +
+      '(ses sistemi etkilenmez):',
+      error?.message || error
+    );
+  }
+}
+
+// =====================================================
 // DURUM
 // =====================================================
 
@@ -216,7 +273,7 @@ function connectGateway() {
           op: 2,
           d: {
             token: TOKEN,
-            intents: 129,
+            intents: currentIntents(),
             properties: {
               os: 'linux',
               browser: 'apatheon',
@@ -293,6 +350,39 @@ function connectGateway() {
       sendPresence();
 
       scheduleVoiceConnect(3000);
+
+      return;
+    }
+
+    // =================================================
+    // HOŞ GELDİN EVENT'LERİ
+    // =================================================
+
+    if (packet.t === 'GUILD_CREATE') {
+      if (welcomeSystem) {
+        welcomeSystem.onGuildCreate(packet.d);
+      }
+
+      return;
+    }
+
+    if (packet.t === 'GUILD_MEMBER_REMOVE') {
+      if (welcomeSystem) {
+        welcomeSystem.onMemberRemove(packet.d);
+      }
+
+      return;
+    }
+
+    if (packet.t === 'GUILD_MEMBER_ADD') {
+      if (welcomeSystem) {
+        welcomeSystem.onMemberAdd(packet.d).catch((error) => {
+          console.error(
+            `[BOT ${botId}] Hoş geldin hatası:`,
+            error?.message || error
+          );
+        });
+      }
 
       return;
     }
@@ -422,6 +512,19 @@ function connectGateway() {
     if (heartbeatTimer) {
       clearInterval(heartbeatTimer);
       heartbeatTimer = null;
+    }
+
+    // Server Members Intent kapalıysa: hoş geldin özelliğini kapat,
+    // ses botu normal intent ile (129) tekrar bağlansın.
+    if (code === 4014 && welcomeIntentOn) {
+      welcomeIntentOn = false;
+      welcomeSystem = null;
+
+      console.error(
+        `[BOT ${botId}] UYARI: SERVER MEMBERS INTENT kapalı! ` +
+        'Developer Portal > Bot > Privileged Gateway Intents ' +
+        'altından aç. Şimdilik hoş geldin kapalı, ses devam ediyor.'
+      );
     }
 
     destroyVoiceConnection();
@@ -821,5 +924,7 @@ setInterval(() => {
 // =====================================================
 // BAŞLAT
 // =====================================================
+
+initWelcome();
 
 connectGateway();
