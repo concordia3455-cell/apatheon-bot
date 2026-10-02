@@ -994,6 +994,30 @@ setInterval(() => {
 // BAŞLAT
 // =====================================================
 
+function initDailyReminder() {
+  if (!IS_WELCOME_BOT) {
+    return;
+  }
+
+  try {
+    const { startDailyReminder } = require('./dailyReminder');
+
+    startDailyReminder({
+      token: TOKEN,
+      guildId: GUILD_ID,
+      tag: `[BOT ${botId}] [GÜNLÜK]`
+    });
+  } catch (error) {
+    console.error(
+      `[BOT ${botId}] Günlük hatırlatma yüklenemedi ` +
+      '(diğer sistemler etkilenmez):',
+      error?.message || error
+    );
+  }
+}
+
 initWelcome();
+
+initDailyReminder();
 
 connectGateway();
