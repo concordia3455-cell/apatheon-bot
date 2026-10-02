@@ -230,7 +230,13 @@ function createWelcomeSystem({ token, guildId, channelId, tag = '[WELCOME]', bac
     return `\`${inviter.code}\``;
   }
 
-  function buildWelcomePayload({ user, count, createdAt, joinedAt, ageDays, inviter, milestone }) {
+  const inviterInline = inviter => {
+    if (!inviter) return null;
+    if (inviter.inviter) return `<@${inviter.inviter.id}> (\`${inviter.code}\`)`;
+    return `\`${inviter.code}\``;
+  };
+
+  function welcomeParts({ user, count, ageDays, inviter, milestone }) {
     const text = pickMessage()
       .replaceAll('{user}', `<@${user.id}>`)
       .replaceAll('{count}', formatCount(count))
@@ -252,43 +258,76 @@ function createWelcomeSystem({ token, guildId, channelId, tag = '[WELCOME]', bac
       `♈ Burç rolleri → <#${CHANNELS.zodiacRoles}>`,
     ].join('\n');
 
-    const embed = {
-      color: milestone ? COLOR_MILESTONE : COLOR_NORMAL,
-      author: { name: `${guildName} • Hoş Geldin` },
-      title: `✨ ${guildName}'a Hoş Geldin!`,
-      description,
-      fields: [
-        { name: '📌 Hızlı Başlangıç', value: quickStart, inline: false },
-        {
-          name: '🎖️ Hesap',
-          value: `${accountBadge(ageDays)}\n<t:${unix(createdAt)}:D>\n(<t:${unix(createdAt)}:R>)`,
-          inline: true,
-        },
-        { name: '📨 Davet Eden', value: inviterText(inviter), inline: true },
-        { name: '👥 Üye Sırası', value: `**#${formatCount(count)}**`, inline: true },
-      ],
-      image: { url: 'attachment://hosgeldin.png' },
-      footer: { text: `${guildName} • Profesyonel Hizmet` },
-      timestamp: joinedAt.toISOString(),
-    };
-
-    const components = [{
-      type: 1,
-      components: [
-        { type: 2, style: 5, label: 'Kurallar', emoji: { name: '📜' }, url: channelUrl(CHANNELS.rules) },
-        { type: 2, style: 5, label: 'Ticket Aç', emoji: { name: '🎫' }, url: channelUrl(CHANNELS.ticket) },
-        { type: 2, style: 5, label: 'Bildirim', emoji: { name: '🔔' }, url: channelUrl(CHANNELS.notifRoles) },
-        { type: 2, style: 5, label: 'Renk', emoji: { name: '🎨' }, url: channelUrl(CHANNELS.colorRoles) },
-        { type: 2, style: 5, label: 'Burç', emoji: { name: '♈' }, url: channelUrl(CHANNELS.zodiacRoles) },
-      ],
-    }];
+    const info = [`🎖️ ${accountBadge(ageDays)}`];
+    const inv = inviterInline(inviter);
+    if (inv) info.push(`📨 Davet eden: ${inv}`);
 
     return {
-      content: `<@${user.id}>`,
-      embeds: [embed],
-      components,
-      allowed_mentions: { users: [user.id] },
+      description,
+      quickStart,
+      info: info.join('  •  '),
+      color: milestone ? COLOR_MILESTONE : COLOR_NORMAL,
     };
+  }
+
+  const buttonRow = () => [{
+    type: 1,
+    components: [
+      { type: 2, style: 5, label: 'Kurallar', emoji: { name: '📜' }, url: channelUrl(CHANNELS.rules) },
+      { type: 2, style: 5, label: 'Ticket Aç', emoji: { name: '🎫' }, url: channelUrl(CHANNELS.ticket) },
+      { type: 2, style: 5, label: 'Bildirim', emoji: { name: '🔔' }, url: channelUrl(CHANNELS.notifRoles) },
+      { type: 2, style: 5, label: 'Renk', emoji: { name: '🎨' }, url: channelUrl(CHANNELS.colorRoles) },
+      { type: 2, style: 5, label: 'Burç', emoji: { name: '♈' }, url: channelUrl(CHANNELS.zodiacRoles) },
+    ],
+  }];
+
+  // Ana düzen: büyük görsel + sade yazı + butonlar (tek kutu içinde)
+  function buildV2Payload(d) {
+    const p = welcomeParts(d);
+
+    return {
+      flags: 1 << 15, // IS_COMPONENTS_V2
+      allowed_mentions: { users: [d.user.id] },
+      components: [{
+        type: 17,
+        accent_color: p.color,
+        components: [
+          { type: 12, items: [{ media: { url: 'attachment://hosgeldin.png' }, description: 'Hoş geldin kartı' }] },
+          { type: 10, content: `### ✨ ${guildName}'a Hoş Geldin!\n${p.description}` },
+          { type: 14, divider: true, spacing: 1 },
+          { type: 10, content: `${p.quickStart}\n\n-# ${p.info}` },
+          ...buttonRow(),
+        ],
+      }],
+    };
+  }
+
+  // Yedek düzen: V2 reddedilirse klasik embed gider
+  function buildClassicPayload(d) {
+    const p = welcomeParts(d);
+
+    return {
+      content: `<@${d.user.id}>`,
+      embeds: [{
+        color: p.color,
+        title: `✨ ${guildName}'a Hoş Geldin!`,
+        description: `${p.description}\n\n${p.quickStart}\n\n${p.info}`,
+        footer: { text: `${guildName} • Profesyonel Hizmet` },
+        timestamp: d.joinedAt.toISOString(),
+      }],
+      components: buttonRow(),
+      allowed_mentions: { users: [d.user.id] },
+    };
+  }
+
+  async function sendWelcome(png, d) {
+    try {
+      await postMessage(channelId, buildV2Payload(d), png);
+    } catch (error) {
+      if (!String(error?.message || '').startsWith('Discord API 400')) throw error;
+      console.warn(`${tag} Yeni düzen reddedildi, klasik düzene geçiliyor:`, error.message);
+      await postMessage(channelId, buildClassicPayload(d), png);
+    }
   }
 
   async function sendSuspiciousAlert({ user, name, count, createdAt, joinedAt, ageDays, inviter }) {
@@ -366,9 +405,7 @@ function createWelcomeSystem({ token, guildId, channelId, tag = '[WELCOME]', bac
         findInviter(),
       ]);
 
-      const payload = buildWelcomePayload({ user, count, createdAt, joinedAt, ageDays, inviter, milestone });
-
-      await postMessage(channelId, payload, png);
+      await sendWelcome(png, { user, count, joinedAt, ageDays, inviter, milestone });
       console.log(`${tag} Hoş geldin gönderildi -> ${name} (#${count})`);
 
       if (ageDays < MIN_ACCOUNT_DAYS) {
