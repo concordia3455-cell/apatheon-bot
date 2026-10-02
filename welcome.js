@@ -48,6 +48,14 @@ async function loadAvatar(src) {
   return loadImage(src);
 }
 
+// ---- Metin temizleme (süslü Unicode / emoji -> kutucuk olmasın) ----
+function clean(text, fallback = '') {
+  const t = String(text ?? '').normalize('NFKC')
+    .replace(/[^\u0020-\u007E\u00A0-\u024F\u2010-\u2027\u20AC\u2122]/g, '')
+    .replace(/\s+/g, ' ').trim();
+  return t || fallback;
+}
+
 // ---- Tarih ----
 const TZ = 'Europe/Istanbul';
 const fmtDate = d => new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: TZ }).format(d);
@@ -98,11 +106,13 @@ function bracket(ctx, x, y, sx, sy, len) {
  * o: { avatarURL, username, serverName, count, createdAt, joinedAt, background, footer }
  */
 async function makeWelcomeImage(o) {
-  const W = 1100, H = 500, cx = W / 2;
+  const W = 1100, H = 560, cx = W / 2;
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext('2d');
   const file = pickBackground(o.background);
   const th = themeOf(file);
+  const username = clean(o.username, 'Yeni Üye');
+  const serverName = clean(o.serverName, 'Apatheon');
 
   // 1) Arka plan
   if (file) {
@@ -114,44 +124,46 @@ async function makeWelcomeImage(o) {
     g.addColorStop(0, '#120a2a'); g.addColorStop(1, '#2f1a63');
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   }
-  ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = 'rgba(0,0,0,0.08)'; ctx.fillRect(0, 0, W, H);
   const vg = ctx.createLinearGradient(0, 0, 0, H);
-  vg.addColorStop(0, 'rgba(0,0,0,0.25)'); vg.addColorStop(0.45, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.6)');
+  vg.addColorStop(0, 'rgba(0,0,0,0.20)'); vg.addColorStop(0.4, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.55)');
   ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
 
   // 2) Çerçeve + köşe braketleri
   ctx.save();
-  ctx.strokeStyle = 'rgba(255,255,255,0.28)'; ctx.lineWidth = 1.5;
-  rr(ctx, 16, 16, W - 32, H - 32, 20); ctx.stroke();
-  ctx.strokeStyle = th.accent; ctx.lineWidth = 3; ctx.lineCap = 'round';
-  ctx.shadowColor = th.accent; ctx.shadowBlur = 12;
-  bracket(ctx, 16, 16, 1, 1, 40); bracket(ctx, W - 16, 16, -1, 1, 40);
-  bracket(ctx, 16, H - 16, 1, -1, 40); bracket(ctx, W - 16, H - 16, -1, -1, 40);
+  ctx.strokeStyle = 'rgba(255,255,255,0.30)'; ctx.lineWidth = 2;
+  rr(ctx, 16, 16, W - 32, H - 32, 22); ctx.stroke();
+  ctx.strokeStyle = th.accent; ctx.lineWidth = 4; ctx.lineCap = 'round';
+  ctx.shadowColor = th.accent; ctx.shadowBlur = 14;
+  bracket(ctx, 16, 16, 1, 1, 46); bracket(ctx, W - 16, 16, -1, 1, 46);
+  bracket(ctx, 16, H - 16, 1, -1, 46); bracket(ctx, W - 16, H - 16, -1, -1, 46);
   ctx.restore();
 
-  // 3) Üst bilgi
+  // 3) Üst bilgi (büyük)
   ctx.textBaseline = 'middle';
-  ctx.fillStyle = th.accent; ctx.beginPath(); ctx.arc(56, 54, 5, 0, Math.PI * 2); ctx.fill();
-  ctx.font = `19px ${F_MED}`; ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.textAlign = 'left';
-  ctx.fillText(o.serverName || 'Sunucu', 72, 54);
-  ctx.textAlign = 'right'; ctx.font = `16px ${F_REG}`; ctx.fillStyle = 'rgba(255,255,255,0.62)';
-  ctx.fillText(fmtDate(new Date()), W - 56, 54);
+  ctx.fillStyle = th.accent; ctx.beginPath(); ctx.arc(60, 58, 7, 0, Math.PI * 2); ctx.fill();
+  ctx.font = `26px ${F_BOLD}`; ctx.fillStyle = '#ffffff'; ctx.textAlign = 'left';
+  ctx.shadowColor = 'rgba(0,0,0,0.7)'; ctx.shadowBlur = 8;
+  ctx.fillText(serverName.toUpperCase(), 82, 58);
+  ctx.shadowBlur = 0;
+  ctx.textAlign = 'right'; ctx.font = `20px ${F_MED}`; ctx.fillStyle = 'rgba(255,255,255,0.75)';
+  ctx.fillText(fmtDate(new Date()), W - 60, 58);
 
-  // 4) Avatar: HUD halkası
-  const ay = 148, ar = 64;
+  // 4) Avatar: büyük HUD halkası
+  const ay = 176, ar = 80;
   const glow = ctx.createRadialGradient(cx, ay, ar * 0.9, cx, ay, ar * 2.6);
-  glow.addColorStop(0, th.accent + '88'); glow.addColorStop(1, th.accent + '00');
+  glow.addColorStop(0, th.accent + '99'); glow.addColorStop(1, th.accent + '00');
   ctx.fillStyle = glow; ctx.fillRect(cx - ar * 2.7, ay - ar * 2.7, ar * 5.4, ar * 5.4);
 
   ctx.save(); ctx.translate(cx, ay);
-  const R1 = ar + 24;
+  const R1 = ar + 22;
   for (let i = 0; i < 72; i++) {
-    const a = (i / 72) * Math.PI * 2, long = i % 6 === 0, l = long ? 10 : 5;
-    ctx.strokeStyle = long ? th.light : th.accent; ctx.globalAlpha = long ? 0.95 : 0.45; ctx.lineWidth = long ? 2 : 1;
+    const a = (i / 72) * Math.PI * 2, long = i % 6 === 0, l = long ? 12 : 6;
+    ctx.strokeStyle = long ? th.light : th.accent; ctx.globalAlpha = long ? 0.95 : 0.5; ctx.lineWidth = long ? 3 : 1.5;
     ctx.beginPath(); ctx.moveTo(Math.cos(a) * R1, Math.sin(a) * R1); ctx.lineTo(Math.cos(a) * (R1 + l), Math.sin(a) * (R1 + l)); ctx.stroke();
   }
-  ctx.globalAlpha = 1; ctx.lineCap = 'round'; ctx.lineWidth = 4; ctx.strokeStyle = th.accent;
-  ctx.shadowColor = th.accent; ctx.shadowBlur = 14;
+  ctx.globalAlpha = 1; ctx.lineCap = 'round'; ctx.lineWidth = 5; ctx.strokeStyle = th.accent;
+  ctx.shadowColor = th.accent; ctx.shadowBlur = 16;
   [[-0.95, -0.35], [0.15, 0.7], [1.15, 1.6], [2.2, 2.75]].forEach(([a, b]) => {
     ctx.beginPath(); ctx.arc(0, 0, ar + 14, a * Math.PI, b * Math.PI); ctx.stroke();
   });
@@ -159,36 +171,36 @@ async function makeWelcomeImage(o) {
 
   const ring = ctx.createLinearGradient(cx - ar, ay - ar, cx + ar, ay + ar);
   ring.addColorStop(0, '#ffffff'); ring.addColorStop(0.5, th.accent); ring.addColorStop(1, th.light);
-  ctx.beginPath(); ctx.arc(cx, ay, ar + 6, 0, Math.PI * 2); ctx.fillStyle = ring; ctx.fill();
-  ctx.beginPath(); ctx.arc(cx, ay, ar + 2.5, 0, Math.PI * 2); ctx.fillStyle = '#0b0818'; ctx.fill();
+  ctx.beginPath(); ctx.arc(cx, ay, ar + 7, 0, Math.PI * 2); ctx.fillStyle = ring; ctx.fill();
+  ctx.beginPath(); ctx.arc(cx, ay, ar + 3, 0, Math.PI * 2); ctx.fillStyle = '#0b0818'; ctx.fill();
   ctx.save();
   ctx.beginPath(); ctx.arc(cx, ay, ar, 0, Math.PI * 2); ctx.clip();
   try { ctx.drawImage(await loadAvatar(o.avatarURL), cx - ar, ay - ar, ar * 2, ar * 2); }
   catch { ctx.fillStyle = '#5865F2'; ctx.fillRect(cx - ar, ay - ar, ar * 2, ar * 2); }
   ctx.restore();
 
-  // 5) Başlık (yan çizgili) + kullanıcı adı (gradyan)
+  // 5) Başlık + kullanıcı adı (büyük)
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.font = `17px ${F_MED}`;
-  const title = 'HOŞ GELDİN', tw = spacedWidth(ctx, title, 10);
-  const lineY = 248, gapX = 26, lineLen = 120;
+  ctx.font = `26px ${F_BOLD}`;
+  const title = 'HOŞ GELDİN', tw = spacedWidth(ctx, title, 12);
+  const lineY = 304, gapX = 28, lineLen = 130;
   [[-1, cx - tw / 2 - gapX], [1, cx + tw / 2 + gapX]].forEach(([dir, x0]) => {
     const g = ctx.createLinearGradient(x0, 0, x0 + dir * lineLen, 0);
     g.addColorStop(0, th.accent); g.addColorStop(1, th.accent + '00');
-    ctx.strokeStyle = g; ctx.lineWidth = 2;
+    ctx.strokeStyle = g; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(x0, lineY); ctx.lineTo(x0 + dir * lineLen, lineY); ctx.stroke();
   });
-  ctx.shadowColor = 'rgba(0,0,0,0.7)'; ctx.shadowBlur = 10;
-  ctx.fillStyle = th.light; spaced(ctx, title, cx, lineY, 10);
+  ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 12;
+  ctx.fillStyle = th.light; spaced(ctx, title, cx, lineY, 12);
 
-  fit(ctx, o.username, F_BOLD, W - 200, 52);
-  const nw = ctx.measureText(o.username).width;
+  fit(ctx, username, F_BOLD, W - 160, 64, 30);
+  const nw = ctx.measureText(username).width;
   const ng = ctx.createLinearGradient(cx - nw / 2, 0, cx + nw / 2, 0);
-  ng.addColorStop(0, '#ffffff'); ng.addColorStop(0.65, '#ffffff'); ng.addColorStop(1, th.light);
-  ctx.fillStyle = ng; ctx.fillText(o.username, cx, 294);
+  ng.addColorStop(0, '#ffffff'); ng.addColorStop(0.7, '#ffffff'); ng.addColorStop(1, th.light);
+  ctx.fillStyle = ng; ctx.fillText(username, cx, 358);
   ctx.shadowBlur = 0;
 
-  // 6) Bilgi kartları
+  // 6) Bilgi kartları (büyük yazı)
   const created = o.createdAt ? new Date(o.createdAt) : null;
   const joined = o.joinedAt ? new Date(o.joinedAt) : new Date();
   const isNew = created && (Date.now() - created.getTime()) < 7 * 86400000;
@@ -198,29 +210,29 @@ async function makeWelcomeImage(o) {
     { label: 'SUNUCUYA KATILDI', value: fmtDate(joined), sub: ago(joined) },
     { label: 'ÜYE SIRASI', value: `#${cnt}`, sub: `${cnt}. üyemiz` },
   ];
-  const gap = 16, pad = 64, ch = 92, cy0 = 340, cw = (W - pad * 2 - gap * 2) / 3;
+  const gap = 16, pad = 56, ch = 106, cy0 = 408, cw = (W - pad * 2 - gap * 2) / 3;
   cards.forEach((c, i) => {
     const x = pad + i * (cw + gap);
     ctx.save();
-    rr(ctx, x, cy0, cw, ch, 16);
-    ctx.fillStyle = 'rgba(8,6,20,0.62)'; ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.16)'; ctx.lineWidth = 1; ctx.stroke();
-    ctx.fillStyle = th.accent; rr(ctx, x + 14, cy0 + 20, 3, ch - 40, 2); ctx.fill();
+    rr(ctx, x, cy0, cw, ch, 18);
+    ctx.fillStyle = 'rgba(8,6,20,0.70)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.20)'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = th.accent; rr(ctx, x + 16, cy0 + 22, 4, ch - 44, 2); ctx.fill();
     ctx.restore();
     ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.font = `12px ${F_MED}`; ctx.fillStyle = th.accent;
-    let lx = x + 30; [...c.label].forEach(k => { ctx.fillText(k, lx, cy0 + 25); lx += ctx.measureText(k).width + 1.6; });
-    fit(ctx, c.value, F_BOLD, cw - 48, 25, 16);
-    ctx.fillStyle = '#ffffff'; ctx.fillText(c.value, x + 30, cy0 + 51);
-    ctx.font = `14px ${F_REG}`; ctx.fillStyle = c.warn ? '#ffc861' : 'rgba(255,255,255,0.62)';
-    ctx.fillText(c.sub, x + 30, cy0 + 75);
+    ctx.font = `15px ${F_BOLD}`; ctx.fillStyle = th.accent;
+    let lx = x + 36; [...c.label].forEach(k => { ctx.fillText(k, lx, cy0 + 26); lx += ctx.measureText(k).width + 1.5; });
+    fit(ctx, c.value, F_BOLD, cw - 56, 32, 18);
+    ctx.fillStyle = '#ffffff'; ctx.fillText(c.value, x + 36, cy0 + 60);
+    ctx.font = `17px ${F_MED}`; ctx.fillStyle = c.warn ? '#ffc861' : 'rgba(255,255,255,0.75)';
+    ctx.fillText(c.sub, x + 36, cy0 + 88);
   });
 
   // 7) Alt imza
-  ctx.textAlign = 'center'; ctx.font = `11px ${F_MED}`; ctx.fillStyle = 'rgba(255,255,255,0.5)';
-  spaced(ctx, (o.footer || 'APATHEON  ·  PROFESYONEL HİZMET'), cx, 460, 4);
+  ctx.textAlign = 'center'; ctx.font = `13px ${F_MED}`; ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  spaced(ctx, clean(o.footer, 'APATHEON  ·  PROFESYONEL HİZMET'), cx, 534, 5);
 
   return canvas.toBuffer('image/png');
 }
 
-module.exports = { makeWelcomeImage, listBackgrounds };
+module.exports = { makeWelcomeImage, listBackgrounds, clean };
