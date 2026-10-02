@@ -9,9 +9,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 const GENERAL_CHANNEL_ID = process.env.DAILY_REMINDER_CHANNEL_ID || '1411168576056066179';
 
-// Türkiye saatiyle gönderim saati (varsayılan 18:00)
+// Türkiye saatiyle gönderim saati (varsayılan 18:20)
 const HOUR = Number(process.env.DAILY_REMINDER_HOUR ?? 18);
-const MINUTE = Number(process.env.DAILY_REMINDER_MINUTE ?? 0);
+const MINUTE = Number(process.env.DAILY_REMINDER_MINUTE ?? 20);
 
 // Bot saatten sonra açılırsa, en fazla bu kadar dakika geç de olsa gönderir
 const WINDOW_MIN = 90;
@@ -32,6 +32,7 @@ const CHANNELS = {
 const MARKER = 'Günlük hatırlatma';
 const COLOR = 0xe11d48;
 const TR_OFFSET_MS = 3 * 3600 * 1000; // Türkiye UTC+3 (yaz/kış saati yok)
+const API_TIMEOUT_MS = 15000; // Discord'a giden istek takılırsa sistem kilitlenmesin
 
 const INTROS = [
   'Merhaba Apatheon ailesi! Sunucuda kendine uygun rolleri seçmeyi ve bir sorun yaşadığında bize ulaşmayı unutma.',
@@ -51,9 +52,14 @@ function startDailyReminder({ token, guildId, tag = '[GÜNLÜK]' }) {
   const channelUrl = id => `https://discord.com/channels/${guildId}/${id}`;
   const trNow = (ms = Date.now()) => new Date(ms + TR_OFFSET_MS);
   const dayKey = ms => trNow(ms).toISOString().slice(0, 10);
+  const minsOfDay = ms => {
+    const d = trNow(ms);
+    return d.getUTCHours() * 60 + d.getUTCMinutes();
+  };
 
   async function api(path, init = {}, attempt = 0) {
     const res = await fetch(`https://discord.com/api/v10${path}`, {
+      signal: AbortSignal.timeout(API_TIMEOUT_MS),
       ...init,
       headers: { Authorization: `Bot ${token}`, ...(init.headers || {}) },
     });
@@ -156,7 +162,9 @@ function startDailyReminder({ token, guildId, tag = '[GÜNLÜK]' }) {
     console.log(`${tag} Günlük hatırlatma gönderildi -> kanal=${GENERAL_CHANNEL_ID}`);
   }
 
-  // Bot yeniden başlasa bile aynı gün ikinci kez atmasın diye kanalın son mesajlarına bakar
+  // Bot yeniden başlasa bile aynı gün ikinci kez atmasın diye kanalın son mesajlarına bakar.
+  // ÖNEMLİ: Sadece bugünün gönderim saatinden SONRA atılmış mesajlar sayılır.
+  // (Sabah yapılan test gönderimleri sayılmasın, yoksa 18:00'de "zaten atılmış" sanıp atlıyordu.)
   async function alreadySentToday() {
     try {
       const meRes = await api('/users/@me');
@@ -168,12 +176,17 @@ function startDailyReminder({ token, guildId, tag = '[GÜNLÜK]' }) {
       const msgs = await res.json();
 
       const today = dayKey(Date.now());
+      const target = HOUR * 60 + MINUTE;
 
-      return msgs.some(m =>
-        m.author?.id === me.id &&
-        dayKey(new Date(m.timestamp).getTime()) === today &&
-        JSON.stringify(m).includes(MARKER)
-      );
+      return msgs.some(m => {
+        if (m.author?.id !== me.id) return false;
+
+        const sentAt = new Date(m.timestamp).getTime();
+        if (dayKey(sentAt) !== today) return false;
+        if (minsOfDay(sentAt) < target) return false; // gönderim saatinden önceki (test) mesajlar sayılmaz
+
+        return JSON.stringify(m).includes(MARKER);
+      });
     } catch {
       return false;
     }
@@ -199,6 +212,7 @@ function startDailyReminder({ token, guildId, tag = '[GÜNLÜK]' }) {
     if (attemptsDay !== day) {
       attemptsDay = day;
       attempts = 0;
+      console.log(`${tag} Gönderim penceresi açıldı (${day}), kontrol ediliyor...`);
     }
     if (attempts >= 3 || Date.now() < nextTryAt) return;
 
@@ -207,6 +221,7 @@ function startDailyReminder({ token, guildId, tag = '[GÜNLÜK]' }) {
     try {
       if (await alreadySentToday()) {
         lastSentDay = day;
+        console.log(`${tag} Bugünün hatırlatması zaten kanalda, tekrar gönderilmeyecek.`);
         return;
       }
 
