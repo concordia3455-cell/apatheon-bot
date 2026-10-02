@@ -259,8 +259,7 @@ function createWelcomeSystem({ token, guildId, channelId, tag = '[WELCOME]', bac
     ].join('\n');
 
     const info = [`🎖️ ${accountBadge(ageDays)}`];
-    const inv = inviterInline(inviter);
-    if (inv) info.push(`📨 Davet eden: ${inv}`);
+    info.push(`📨 Davet eden: ${inviterInline(inviter) || 'Bilinmiyor'}`);
 
     return {
       description,
@@ -295,8 +294,9 @@ function createWelcomeSystem({ token, guildId, channelId, tag = '[WELCOME]', bac
           { type: 12, items: [{ media: { url: 'attachment://hosgeldin.png' }, description: 'Hoş geldin kartı' }] },
           { type: 10, content: `### ✨ ${guildName}'a Hoş Geldin!\n${p.description}` },
           { type: 14, divider: true, spacing: 1 },
-          { type: 10, content: `${p.quickStart}\n\n-# ${p.info}` },
+          { type: 10, content: p.quickStart },
           ...buttonRow(),
+          { type: 10, content: `-# ${p.info}` },
         ],
       }],
     };
